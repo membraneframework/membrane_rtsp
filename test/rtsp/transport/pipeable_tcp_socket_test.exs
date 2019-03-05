@@ -1,12 +1,12 @@
-defmodule Membrane.RTSP.Transport.PipeableTCPSocketTest do
+defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
   use ExUnit.Case
   import Mockery
   import Mockery.Assertions
-  alias Membrane.RTSP.Transport.PipeableTCPSocket
+  alias Membrane.Protocol.RTSP.Transport.PipeableTCPSocket
 
   setup do
     state = %PipeableTCPSocket.State{
-      connection_info: %Membrane.RTSP.Session.ConnectionInfo{
+      connection_info: %Membrane.Protocol.RTSP.Session.ConnectionInfo{
         port: 4000,
         host: "test.com",
         path: "/"
@@ -19,7 +19,7 @@ defmodule Membrane.RTSP.Transport.PipeableTCPSocketTest do
 
   describe "Pipeable TCP Socket does" do
     test "consume connection info and produces state" do
-      info = %Membrane.RTSP.Session.ConnectionInfo{
+      info = %Membrane.Protocol.RTSP.Session.ConnectionInfo{
         host: "wowzaec2demo.streamlock.net",
         path: "/vod/mp4:BigBuckBunny_115k.mov",
         port: 554
@@ -39,7 +39,7 @@ defmodule Membrane.RTSP.Transport.PipeableTCPSocketTest do
       mock(:gen_tcp, [send: 2], :ok)
 
       assert {:noreply,
-              %Membrane.RTSP.Transport.PipeableTCPSocket.State{
+              %Membrane.Protocol.RTSP.Transport.PipeableTCPSocket.State{
                 connection: conn,
                 queue: queue
               }} = PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
@@ -55,7 +55,7 @@ defmodule Membrane.RTSP.Transport.PipeableTCPSocketTest do
       assert {:noreply, result_state} =
                PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
 
-      assert %Membrane.RTSP.Transport.PipeableTCPSocket.State{
+      assert %Membrane.Protocol.RTSP.Transport.PipeableTCPSocket.State{
                connection: conn,
                queue: queue
              } = result_state
@@ -75,7 +75,7 @@ defmodule Membrane.RTSP.Transport.PipeableTCPSocketTest do
       state = %{state | queue: Qex.new() |> Qex.push(self_client)}
       assert {:noreply, state} = PipeableTCPSocket.handle_info({:tcp, :socket, sample}, state)
       assert state = %PipeableTCPSocket.State{state | connection: nil}
-      assert_received {:tag, ^sample}
+      assert_received {:tag, {:ok, ^sample}}
     end
   end
 end

@@ -1,7 +1,13 @@
-defmodule Membrane.RTSP.Transport do
-  alias Membrane.RTSP.Session.ConnectionInfo
+defmodule Membrane.Protocol.RTSP.Transport do
+  use Bunch
+  alias Membrane.Protocol.RTSP.Session.ConnectionInfo
 
-  # TODO: Change me
-  @callback start_transport(ConnectionInfo.t()) :: :ignore | {:error, atom()} | {:ok, pid()}
-  @callback execute(binary(), pid(), [tuple()]) :: binary()
+  @callback execute(binary(), {:via, Registry, {TransportRegistry, binary()}}, [tuple()]) ::
+              binary()
+
+  @spec start_link(module(), binary(), ConnectionInfo.t()) ::
+          :ignore | {:error, any()} | {:ok, pid()}
+  def start_link(module, ref, connection_info) do
+    GenServer.start_link(module, connection_info, name: {:via, Registry, {TransportRegistry, ref}})
+  end
 end

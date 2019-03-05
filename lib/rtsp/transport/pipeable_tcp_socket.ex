@@ -1,11 +1,11 @@
-defmodule Membrane.RTSP.Transport.PipeableTCPSocket do
+defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   use Bunch
   use GenServer
   import Mockery.Macro
 
-  @behaviour Membrane.RTSP.Transport
+  @behaviour Membrane.Protocol.RTSP.Transport
 
-  alias Membrane.RTSP.Session.ConnectionInfo
+  alias Membrane.Protocol.RTSP.Session.ConnectionInfo
 
   defmodule State do
     @enforce_keys [:queue, :connection_info]
@@ -16,11 +16,6 @@ defmodule Membrane.RTSP.Transport.PipeableTCPSocket do
             connection: :gen_tcp.socket() | nil,
             queue: Qex.t(pid())
           }
-  end
-
-  @impl true
-  def start_transport(%ConnectionInfo{} = connection_info) do
-    GenServer.start_link(__MODULE__, connection_info)
   end
 
   @impl true
@@ -42,6 +37,7 @@ defmodule Membrane.RTSP.Transport.PipeableTCPSocket do
 
   @spec open(ConnectionInfo.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
   defp open(%ConnectionInfo{host: host, port: port}) do
+    # TODO check wether it is working
     mockable(:gen_tcp).connect(to_charlist(host), port, [:binary, {:active, true}])
   end
 

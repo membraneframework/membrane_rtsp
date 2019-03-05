@@ -1,5 +1,5 @@
 defmodule Membrane.Support.Factory.SampleOptionsRequest do
-  alias Membrane.RTSP.Request
+  alias Membrane.Protocol.RTSP.Request
 
   @external_resource "test/support/fixtures/options_request.bin"
   def raw, do: "test/support/fixtures/options_request.bin" |> File.read!()
@@ -14,8 +14,8 @@ defmodule Membrane.Support.Factory.SampleOptionsRequest do
 
   def request,
     do: %Request{
-      url: url(),
       method: method(),
-      headers: headers()
+      headers: headers(),
+      body: nil
     }
 end

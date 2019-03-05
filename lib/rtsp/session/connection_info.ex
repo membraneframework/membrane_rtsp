@@ -1,4 +1,4 @@
-defmodule Membrane.RTSP.Session.ConnectionInfo do
+defmodule Membrane.Protocol.RTSP.Session.ConnectionInfo do
   use Bunch
   @enforce_keys [:host, :port, :path]
   defstruct @enforce_keys

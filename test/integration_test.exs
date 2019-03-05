@@ -1,10 +1,11 @@
-defmodule Membrane.RTSP.IntegrationTest do
+defmodule Membrane.Protocol.RTSP.IntegrationTest do
   use ExUnit.Case
 
-  alias Membrane.Support.Factory
+  alias Membrane.Support.Factory.SampleOptionsRequest
+  alias Membrane.Protocol.RTSP.Request
 
   test "Remove me" do
-    query = Factory.SampleOptionsRequest.request() |> String.Chars.to_string()
+    query = SampleOptionsRequest.request() |> Request.to_string(SampleOptionsRequest.url())
 
     {:ok, socket} =
       :gen_tcp.connect("wowzaec2demo.streamlock.net" |> to_charlist(), 554, [

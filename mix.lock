@@ -3,6 +3,7 @@
   "dialyxir": {:hex, :dialyxir, "1.0.0-rc.4", "71b42f5ee1b7628f3e3a6565f4617dfb02d127a0499ab3e72750455e986df001", [:mix], [{:erlex, "~> 0.1", [hex: :erlex, repo: "hexpm", optional: false]}], "hexpm"},
   "erlex": {:hex, :erlex, "0.2.0", "80349ebd58553dbd63489937380bfa7d906be3266b91bbd9d2bd6b71f1e8c07d", [:mix], [], "hexpm"},
   "meck": {:hex, :meck, "0.8.13", "ffedb39f99b0b99703b8601c6f17c7f76313ee12de6b646e671e3188401f7866", [:rebar3], [], "hexpm"},
+  "membrane_protocol_sdp": {:git, "https://github.com/membraneframework/membrane-protocol-sdp.git", "81f729311834f070d572cedd18b886899dc5250c", [branch: "basic-sdp"]},
   "mockery": {:hex, :mockery, "2.3.0", "f1af3976916e7402427116f491e3038a251857de8f0836952c2fa24ad6de4317", [:mix], [], "hexpm"},
   "qex": {:hex, :qex, "0.5.0", "5a3a9becf67d4006377c4c247ffdaaa8ae5b3634a0caadb788dc24d6125068f4", [:mix], [], "hexpm"},
 }
