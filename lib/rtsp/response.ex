@@ -4,7 +4,7 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   alias Membrane.Protocol.SDP
 
-  @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z ]+$/
+  @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/
 
   @type t :: %__MODULE__{
           status: non_neg_integer(),
@@ -14,10 +14,10 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   @spec parse(binary()) :: {:ok, t()} | {:error, atom()}
   def parse(response) do
-    {%__MODULE__{}, response}
-    |> parse_start_line()
-    ~>> ({:ok, result} -> parse_headers(result))
-    ~>> ({:ok, result} -> parse_body(result))
+    with {:ok, result} <- {%__MODULE__{}, response} |> parse_start_line(),
+         {:ok, result} <- parse_headers(result) do
+      parse_body(result)
+    end
   end
 
   defp parse_start_line({response, binary}) do
@@ -43,7 +43,7 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   defp parse_headers({response, "\r\n" <> rest}, acc) do
     acc
-    |> Enum.into(%{})
+    |> Enum.reverse()
     ~> %__MODULE__{response | headers: &1}
     ~> {:ok, {&1, rest}}
   end
@@ -58,8 +58,8 @@ defmodule Membrane.Protocol.RTSP.Response do
   end
 
   defp parse_body({%__MODULE__{headers: headers} = response, data}) do
-    case headers["Content-Type"] do
-      "application/sdp" ->
+    case List.keyfind(headers, "Content-Type", 0) do
+      {"Content-Type", "application/sdp"} ->
         data
         |> SDP.parse()
         ~>> ({:ok, result} -> %__MODULE__{response | body: result} ~> {:ok, &1})

@@ -4,7 +4,9 @@ defmodule Membrane.Support.Factory.SampleOptionsRequest do
   @external_resource "test/support/fixtures/options_request.bin"
   def raw, do: "test/support/fixtures/options_request.bin" |> File.read!()
   def method, do: "OPTIONS"
-  def url, do: "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov"
+
+  def url,
+    do: "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov" |> URI.parse()
 
   def headers,
     do: [

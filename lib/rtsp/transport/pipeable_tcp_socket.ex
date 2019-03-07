@@ -5,14 +5,12 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
   @behaviour Membrane.Protocol.RTSP.Transport
 
-  alias Membrane.Protocol.RTSP.Session.ConnectionInfo
-
   defmodule State do
     @enforce_keys [:queue, :connection_info]
     defstruct @enforce_keys ++ [:connection]
 
     @type t :: %__MODULE__{
-            connection_info: ConnectionInfo.t(),
+            connection_info: URI.t(),
             connection: :gen_tcp.socket() | nil,
             queue: Qex.t(pid())
           }
@@ -25,7 +23,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   end
 
   @impl true
-  def init(%ConnectionInfo{} = connection_info) do
+  def init(%URI{} = connection_info) do
     state = %State{
       connection_info: connection_info,
       connection: nil,
@@ -35,8 +33,8 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
     {:ok, state}
   end
 
-  @spec open(ConnectionInfo.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
-  defp open(%ConnectionInfo{host: host, port: port}) do
+  @spec open(URI.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
+  defp open(%URI{host: host, port: port}) do
     # TODO check wether it is working
     mockable(:gen_tcp).connect(to_charlist(host), port, [:binary, {:active, true}])
   end

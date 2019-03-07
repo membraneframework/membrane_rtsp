@@ -6,7 +6,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
 
   setup do
     state = %PipeableTCPSocket.State{
-      connection_info: %Membrane.Protocol.RTSP.Session.ConnectionInfo{
+      connection_info: %URI{
         port: 4000,
         host: "test.com",
         path: "/"
@@ -19,7 +19,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
 
   describe "Pipeable TCP Socket does" do
     test "consume connection info and produces state" do
-      info = %Membrane.Protocol.RTSP.Session.ConnectionInfo{
+      info = %URI{
         host: "wowzaec2demo.streamlock.net",
         path: "/vod/mp4:BigBuckBunny_115k.mov",
         port: 554

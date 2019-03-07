@@ -1,20 +1,25 @@
 defmodule Membrane.Protocol.RTSP do
-  use Application
+  use Bunch
+  alias Membrane.Protocol.RTSP.{Session, Request}
 
-  alias Membrane.Protocol.RTSP.Transport
+  def describe(session, headers \\ []) do
+    do_request(session, "DESCRIBE", headers, "")
+  end
 
-  def start(_type, _args) do
-    children = [
-      %{
-        id: TransportRegistry,
-        start: {Registry, :start_link, [:unique, TransportRegistry]}
-      },
-      %{
-        id: Transport.Supervisor,
-        start: {Transport.Supervisor, :start_link, []}
-      }
-    ]
+  def play(session, headers \\ [], body \\ "") do
+    do_request(session, "PLAY", headers, body)
+  end
 
-    Supervisor.start_link(children, strategy: :one_for_one)
+  def setup(session, path, headers \\ [], body \\ "") do
+    do_request(session, "SETUP", headers, body, path)
+  end
+
+  def teardown(session) do
+    do_request(session, "TEARDOWN")
+  end
+
+  def do_request(session, method, headers \\ [], body \\ "", path \\ nil) do
+    %Request{method: method, headers: headers, body: body, path: path}
+    ~> Session.execute(session, &1)
   end
 end

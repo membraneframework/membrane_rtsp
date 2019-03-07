@@ -4,15 +4,13 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketIntegrationTest do
 
   alias Membrane.Protocol.RTSP.Transport
   alias Membrane.Protocol.RTSP.Transport.PipeableTCPSocket
-  alias Membrane.Protocol.RTSP.Session.ConnectionInfo
 
   @tag external: true
   test "executes request successfully" do
     {:ok, pid} =
       "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov"
       |> URI.parse()
-      |> ConnectionInfo.from_url()
-      ~> ({:ok, info} -> Transport.start_link(PipeableTCPSocket, __MODULE__, info))
+      ~> Transport.start_link(PipeableTCPSocket, __MODULE__, &1)
 
     query =
       "DESCRIBE rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n\r\n"
