@@ -77,5 +77,20 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
       assert state = %PipeableTCPSocket.State{state | connection: nil}
       assert_received {:tag, {:ok, ^sample}}
     end
+
+    test "does return an error if connection can't be made", %{state: state} do
+      mock(:gen_tcp, [connect: 3], {:error, :etimedout})
+
+      assert {:reply, {:error, :etimedout}, _} =
+               PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
+    end
+
+    test "does return an error if message couldn't be sent", %{state: state} do
+      mock(:gen_tcp, [send: 2], {:error, :closed})
+      state = %PipeableTCPSocket.State{state | connection: self()}
+
+      assert {:reply, {:error, :closed}, result_state} =
+               PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
+    end
   end
 end

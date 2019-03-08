@@ -32,14 +32,14 @@ defmodule Membrane.Protocol.RTSP.Request do
   defp apply_path(url, %__MODULE__{path: nil}), do: url
 
   defp apply_path(url, %__MODULE__{path: path}),
-    do: Path.join(url |> IO.inspect(), path |> IO.inspect())
+    do: Path.join(url, path)
 
   defp header_to_string({header, value}), do: header <> ": " <> String.Chars.to_string(value)
   defp render_headers([]), do: ""
 
-  defp render_headers(list),
-    do:
-      list
-      |> Enum.map(fn elem -> header_to_string(elem) end)
-      |> Enum.join("\r\n")
+  defp render_headers(list) do
+    list
+    |> Enum.map(fn elem -> header_to_string(elem) end)
+    |> Enum.join("\r\n")
+  end
 end

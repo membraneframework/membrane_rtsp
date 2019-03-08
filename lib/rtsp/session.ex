@@ -4,18 +4,17 @@ defmodule Membrane.Protocol.RTSP.Session do
 
   alias Membrane.Protocol.RTSP.{Request, Response}
   alias Membrane.Protocol.RTSP.Transport
-  alias(Membrane.Protocol.RTSP.Transport.Supervisor)
+  alias Membrane.Protocol.RTSP.Transport.Supervisor
 
   # TODO: Change me
   # Maybe something similar but with version
-  @user_agent "Membrane RTSP Client"
+  @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   # TODO implement session close
-  # TODO preserve session_id header
 
   defmodule State do
     # TODO enforce keys
-    defstruct [:transport, :cseq, :uri, :transport_executor, :session_id]
+    defstruct [:transport, {:cseq, 0}, :uri, :transport_executor, :session_id]
 
     @type t :: %__MODULE__{
             transport: module(),
@@ -37,16 +36,18 @@ defmodule Membrane.Protocol.RTSP.Session do
   def init(%{transport: transport, url: url}) do
     ref = :os.system_time(:millisecond) |> to_string() ~> (&1 <> url)
 
-    with %URI{port: port, host: host} = uri when is_number(port) and is_binary(host) <-
-           URI.parse(url),
+    with %URI{port: port, host: host, scheme: "rtsp"} = uri
+         when is_number(port) and is_binary(host) <- URI.parse(url),
          {:ok, _pid} <- Supervisor.start_child(transport, ref, uri) do
       %State{
         transport: transport,
-        cseq: 0,
         transport_executor: ref,
         uri: uri
       }
       ~> {:ok, &1}
+    else
+      %URI{} -> {:stop, :invalid_uri}
+      {:error, reason} -> {:stop, reason}
     end
   end
 
@@ -65,6 +66,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     with {:ok, raw_response} <- perform_execution(request, state),
          {:ok, parsed_respone} <- Response.parse(raw_response),
          {:ok, state} <- handle_session_id(parsed_respone, state) do
+      # Should I bump cseq if request fails?
       state = %State{state | cseq: cseq + 1}
       {:reply, {:ok, parsed_respone}, state}
     else
@@ -78,7 +80,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     transport_ref = Transport.transport_name(executor)
 
     request
-    |> Request.with_header("cseq", cseq)
+    |> Request.with_header("CSeq", cseq)
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri)
     |> Request.to_string(uri)
@@ -90,15 +92,19 @@ defmodule Membrane.Protocol.RTSP.Session do
   defp apply_credentials(request, %URI{userinfo: info}),
     do: info |> Base.encode64() ~> Request.with_header(request, "Authorization", "Basic " <> &1)
 
-  defp handle_session_id(%Response{headers: headers}, state) do
-    [session_id | _] =
-      headers
-      |> List.keyfind("Session", 0)
-      ~> ({"Session", value} -> String.split(value, ";"))
+  # Some responses does not have to return Session ID
+  # If it does return one it needs to match one stored in state
+  defp handle_session_id(%Response{} = response, state) do
+    with {:ok, session_value} <- Response.get_header(response, "Session") do
+      [session_id | _] = String.split(session_value, ";")
 
-    case state do
-      %State{session_id: nil} -> %State{state | session_id: session_id} ~> {:ok, &1}
-      %State{session_id: ^session_id} -> {:ok, state}
+      case state do
+        %State{session_id: nil} -> %State{state | session_id: session_id} ~> {:ok, &1}
+        %State{session_id: ^session_id} -> {:ok, state}
+        _ -> {:error, :invalid_session_id}
+      end
+    else
+      {:error, :no_such_header} -> {:ok, state}
     end
   end
 end

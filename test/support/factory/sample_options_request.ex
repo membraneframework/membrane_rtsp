@@ -17,7 +17,6 @@ defmodule Membrane.Support.Factory.SampleOptionsRequest do
   def request,
     do: %Request{
       method: method(),
-      headers: headers(),
-      body: nil
+      headers: headers()
     }
 end

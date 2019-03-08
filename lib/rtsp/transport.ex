@@ -1,8 +1,10 @@
 defmodule Membrane.Protocol.RTSP.Transport do
   use Bunch
 
-  @callback execute(binary(), {:via, Registry, {TransportRegistry, binary()}}, [tuple()]) ::
-              binary()
+  alias Membrane.Protocol.RTSP.Request
+
+  @callback execute(Request.t(), {:via, Registry, {TransportRegistry, binary()}}, [tuple()]) ::
+              {:ok, binary()} | {:error, atom()}
 
   @spec start_link(module(), binary(), URI.t()) :: :ignore | {:error, any()} | {:ok, pid()}
   def start_link(module, ref, connection_info) do

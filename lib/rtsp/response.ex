@@ -1,6 +1,7 @@
 defmodule Membrane.Protocol.RTSP.Response do
   use Bunch
-  defstruct [:status, :headers, :body, :version]
+  @enforce_keys [:status, :version]
+  defstruct @enforce_keys ++ [{:headers, []}, {:body, ""}]
 
   alias Membrane.Protocol.SDP
 
@@ -14,13 +15,21 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   @spec parse(binary()) :: {:ok, t()} | {:error, atom()}
   def parse(response) do
-    with {:ok, result} <- {%__MODULE__{}, response} |> parse_start_line(),
+    with {:ok, result} <- response |> parse_start_line(),
          {:ok, result} <- parse_headers(result) do
       parse_body(result)
     end
   end
 
-  defp parse_start_line({response, binary}) do
+  @spec get_header(__MODULE__.t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
+  def get_header(%__MODULE__{headers: headers}, name) do
+    case List.keyfind(headers, name, 0) do
+      {^name, value} -> {:ok, value}
+      nil -> {:error, :no_such_header}
+    end
+  end
+
+  defp parse_start_line(binary) do
     [line, rest] = split_next_chunk(binary)
 
     case Regex.run(@start_line_regex, line) do
@@ -30,7 +39,7 @@ defmodule Membrane.Protocol.RTSP.Response do
             {:error, :invalid_status_code}
 
           {code, _} when is_number(code) ->
-            %__MODULE__{response | version: version, status: code}
+            %__MODULE__{version: version, status: code}
             ~> {:ok, {&1, rest}}
         end
 

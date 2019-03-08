@@ -48,7 +48,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
       # TODO: Handle error properly
       {:error, _} = error ->
-        error
+        {:reply, error, state}
     end
   end
 
@@ -83,6 +83,6 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
   defp execute_request(request, %State{connection: conn} = state) do
     mockable(:gen_tcp).send(conn, request)
-    {:ok, state}
+    ~>> (:ok -> {:ok, state})
   end
 end
