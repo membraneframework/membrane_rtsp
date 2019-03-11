@@ -13,6 +13,8 @@ defmodule Membrane.Protocol.RTSP.Transport.Supervisor do
     DynamicSupervisor.start_child(__MODULE__, spec)
   end
 
+  def terminate_child(pid), do: Supervisor.terminate_child(__MODULE__, pid)
+
   @impl true
   def init(_) do
     DynamicSupervisor.init(strategy: :one_for_one)

@@ -79,16 +79,18 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
 
   describe "Session when initializing" do
     test "parses uri and spawns connection" do
+      ref = "ref"
+
       assert {:ok, state} =
                "rtsp://domain.net:554/vod/mp4:name.mov"
-               ~> %{url: &1, transport: Fake}
+               ~> %{url: &1, transport: Fake, ref: ref}
                |> Session.init()
 
       assert %Session.State{
                cseq: 0,
                session_id: nil,
                transport: Fake,
-               transport_executor: executor,
+               transport_executor: ^ref,
                uri: %URI{host: "domain.net", port: 554}
              } = state
     end
@@ -96,8 +98,22 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
     test "returns an error when uri does not contain host and port" do
       assert {:stop, :invalid_uri} ==
                "rtsp://:file.extension"
-               ~> %{url: &1, transport: Fake}
+               ~> %{url: &1, transport: Fake, ref: ""}
                |> Session.init()
+    end
+  end
+
+  describe "Session when terminating" do
+    setup do
+      {:ok, session} = Session.start_link("rtsp://domain.net:554/vod/mp4:name.mov", Fake)
+      [session: session]
+    end
+
+    test "does nothing if connection is dead", %{session: session} do
+      assert Process.alive?(session)
+      Session.close(session)
+      :timer.sleep(1)
+      refute Process.alive?(session)
     end
   end
 end

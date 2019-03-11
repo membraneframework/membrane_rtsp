@@ -1,4 +1,7 @@
 defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
+  @moduledoc """
+  Transport module that keeps connection open as long as session is active.
+  """
   use Bunch
   use GenServer
   import Mockery.Macro
@@ -35,7 +38,6 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
   @spec open(URI.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
   defp open(%URI{host: host, port: port}) do
-    # TODO check wether it is working
     mockable(:gen_tcp).connect(to_charlist(host), port, [:binary, {:active, true}])
   end
 
@@ -63,10 +65,11 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
     {:noreply, %State{state | connection: nil}}
   end
 
+  # TODO Wrap into mockable and test this behaviour
   @impl true
-  def terminate(_reason, %State{connection: connection}) do
-    :gen_tcp.close(connection)
-  end
+  def terminate(reason, state)
+  def terminate(_, %State{connection: nil}), do: :ok
+  def terminate(_, %State{connection: connection}), do: mockable(:gen_tcp).close(connection)
 
   @spec execute_request(binary(), State.t()) :: {:ok, State.t()} | {:error, atom()}
   defp execute_request(request, %State{connection: nil, connection_info: connection_info} = state) do

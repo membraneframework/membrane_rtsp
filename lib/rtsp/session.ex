@@ -6,15 +6,13 @@ defmodule Membrane.Protocol.RTSP.Session do
   alias Membrane.Protocol.RTSP.Transport
   alias Membrane.Protocol.RTSP.Transport.Supervisor
 
-  # TODO: Change me
-  # Maybe something similar but with version
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
-  # TODO implement session close
+  # TODO implement pair supervision
 
   defmodule State do
-    # TODO enforce keys
-    defstruct [:transport, {:cseq, 0}, :uri, :transport_executor, :session_id]
+    @enforce_keys [:transport, :uri, :transport_executor]
+    defstruct @enforce_keys ++ [{:cseq, 0}, :session_id]
 
     @type t :: %__MODULE__{
             transport: module(),
@@ -25,17 +23,28 @@ defmodule Membrane.Protocol.RTSP.Session do
           }
   end
 
-  # TODO make transport a registered process
-
-  def start_link(uri, transport) do
-    GenServer.start_link(__MODULE__, %{transport: transport, url: uri})
+  def start_link(url, transport) do
+    ref = :os.system_time(:millisecond) |> to_string() ~> (&1 <> url)
+    GenServer.start_link(__MODULE__, %{transport: transport, url: url, ref: ref})
   end
 
-  @spec init(%{transport: any(), url: binary() | URI.t()}) ::
-          {:stop, :invalid_url} | {:ok, Membrane.Protocol.RTSP.Session.State.t()}
-  def init(%{transport: transport, url: url}) do
-    ref = :os.system_time(:millisecond) |> to_string() ~> (&1 <> url)
+  def close(session) do
+    GenServer.stop(session)
+  end
 
+  @spec execute(pid(), Request.t()) :: {:ok, Response.t()} | {:error, atom()}
+  def execute(session, request) do
+    # Maybe configure timeout somehow?
+    # Should I handle timeout
+    try do
+      GenServer.call(session, {:execute, request})
+    catch
+      exit: _ -> {:error, :timeout}
+    end
+  end
+
+  @impl true
+  def init(%{transport: transport, url: url, ref: ref}) do
     with %URI{port: port, host: host, scheme: "rtsp"} = uri
          when is_number(port) and is_binary(host) <- URI.parse(url),
          {:ok, _pid} <- Supervisor.start_child(transport, ref, uri) do
@@ -51,17 +60,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     end
   end
 
-  @spec execute(pid(), Request.t()) :: {:ok, Response.t()} | {:error, atom()}
-  def execute(session, request) do
-    # Maybe configure timeout somehow?
-    # Should I handle timeout
-    try do
-      GenServer.call(session, {:execute, request})
-    catch
-      exit: _ -> {:error, :timeout}
-    end
-  end
-
+  @impl true
   def handle_call({:execute, request}, _from, %State{cseq: cseq} = state) do
     with {:ok, raw_response} <- perform_execution(request, state),
          {:ok, parsed_respone} <- Response.parse(raw_response),
@@ -73,6 +72,13 @@ defmodule Membrane.Protocol.RTSP.Session do
       # TODO: test this behaviour
       {:error, _} = error -> {:reply, error, state}
     end
+  end
+
+  @impl true
+  def terminate(_reason, %State{transport_executor: transport_executor}) do
+    Registry.dispatch(TransportRegistry, transport_executor, fn [{transport_pid, _}] ->
+      Supervisor.terminate_child(transport_pid)
+    end)
   end
 
   defp perform_execution(request, %State{uri: uri} = state) do

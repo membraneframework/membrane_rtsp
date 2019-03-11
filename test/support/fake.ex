@@ -1,4 +1,5 @@
 defmodule Membrane.Protocol.RTSP.Transport.Fake do
+  @moduledoc false
   use GenServer
   import Mockery.Macro
 
