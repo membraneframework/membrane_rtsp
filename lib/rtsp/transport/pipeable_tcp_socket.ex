@@ -7,6 +7,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   import Mockery.Macro
 
   @behaviour Membrane.Protocol.RTSP.Transport
+  @default_timeout 5000
 
   defmodule State do
     @enforce_keys [:queue, :connection_info]
@@ -20,8 +21,8 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   end
 
   @impl true
-  def execute(raw_request, executor, opts \\ [timeout: 5000]) do
-    timeout = Keyword.fetch!(opts, :timeout)
+  def execute(raw_request, executor, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
     GenServer.call(executor, {:execute, raw_request}, timeout)
   end
 
@@ -73,10 +74,15 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
   @spec execute_request(binary(), State.t()) :: {:ok, State.t()} | {:error, atom()}
   defp execute_request(request, %State{connection: nil, connection_info: connection_info} = state) do
+    # IO.inspect(request, label: "Request")
+
     case open(connection_info) do
       {:ok, pid} ->
         state = %State{state | connection: pid}
+
         execute_request(request, state)
+
+      # |> IO.inspect(label: "REsponse")
 
       # TODO Handle this somewhere
       {:error, _cause} = error ->

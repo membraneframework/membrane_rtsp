@@ -7,9 +7,13 @@ defmodule Membrane.Protocol.RTSP.Transport.Fake do
   @response "RTSP/1.0 200 OK\r\n"
 
   @impl true
-  def execute(request, ref, _options \\ []) do
+  def execute(request, ref, options) do
     mockable(__MODULE__).proxy(request, ref)
+    resolver = Keyword.get(options, :resolver, &__MODULE__.default_resolver/1)
+    resolver.(request)
+  end
 
+  def default_resolver(request) do
     [_, rest] = String.split(request, "\r\n", parts: 2)
     {:ok, @response <> rest}
   end
@@ -17,11 +21,6 @@ defmodule Membrane.Protocol.RTSP.Transport.Fake do
   @impl true
   def init(connection_info) do
     {:ok, connection_info}
-  end
-
-  @impl true
-  def handle_info(:crash_me, state) do
-    raise "you asked for it"
   end
 
   def proxy(_request, _ref), do: nil

@@ -1,13 +1,13 @@
-defmodule Membrane.Protocol.RTSP.Transport.Supervisor do
+defmodule Membrane.Protocol.RTSP.Session.Supervisor do
   use DynamicSupervisor
-  alias Membrane.Protocol.RTSP.Transport
+  alias Membrane.Protocol.RTSP.Session.CoupleSupervisor
 
   def start_link(), do: DynamicSupervisor.start_link(__MODULE__, nil, name: __MODULE__)
 
-  def start_child(module, ref, conn_info) do
+  def start_child(module, url, options \\ []) do
     spec = %{
-      id: TransportWorker,
-      start: {Transport, :start_link, [module, ref, conn_info]}
+      id: CoupleSupervisor,
+      start: {CoupleSupervisor, :start_link, [module, url, options]}
     }
 
     DynamicSupervisor.start_child(__MODULE__, spec)

@@ -35,21 +35,5 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketIntegrationTest do
       profile-level-id=42C01E;sprop-parameter-sets=Z0LAHtkDxWhAAAADAEAAAAwDxYuS,aMuMsg==\r\n
       a=cliprect:0,0,160,240\r\na=framesize:97 240-160\r\na=framerate:24.0\r\na=control:trackID=2"
     end
-
-    test "dies when it's session dies" do
-      alias Membrane.Protocol.RTSP.Session
-
-      assert {:ok, session} =
-               Session.start_link(
-                 "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov",
-                 PipeableTCPSocket
-               )
-
-      %Session.State{transport_executor: transport_ref} = :sys.get_state(session)
-      [{pid, _}] = Registry.lookup(TransportRegistry, transport_ref)
-      assert Process.alive?(pid)
-      GenServer.stop(session)
-      refute Process.alive?(pid)
-    end
   end
 end

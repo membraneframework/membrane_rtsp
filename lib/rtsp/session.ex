@@ -4,7 +4,6 @@ defmodule Membrane.Protocol.RTSP.Session do
 
   alias Membrane.Protocol.RTSP.{Request, Response}
   alias Membrane.Protocol.RTSP.Transport
-  alias Membrane.Protocol.RTSP.Transport.Supervisor
 
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
@@ -12,24 +11,27 @@ defmodule Membrane.Protocol.RTSP.Session do
 
   defmodule State do
     @enforce_keys [:transport, :uri, :transport_executor]
-    defstruct @enforce_keys ++ [{:cseq, 0}, :session_id]
+    defstruct @enforce_keys ++ [{:cseq, 0}, :session_id, {:execution_options, []}]
 
     @type t :: %__MODULE__{
             transport: module(),
             cseq: non_neg_integer(),
             uri: URI.t(),
             transport_executor: binary(),
-            session_id: binary() | nil
+            session_id: binary() | nil,
+            execution_options: Keyword.t()
           }
   end
 
-  def start_link(url, transport) do
-    ref = :os.system_time(:millisecond) |> to_string() ~> (&1 <> url)
-    GenServer.start_link(__MODULE__, %{transport: transport, url: url, ref: ref})
+  def child_spec(args) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, args}
+    }
   end
 
-  def close(session) do
-    GenServer.stop(session)
+  def start_link(transport, ref, url, options) do
+    GenServer.start_link(__MODULE__, %{transport: transport, url: url, ref: ref, options: options})
   end
 
   @spec execute(pid(), Request.t()) :: {:ok, Response.t()} | {:error, atom()}
@@ -44,20 +46,14 @@ defmodule Membrane.Protocol.RTSP.Session do
   end
 
   @impl true
-  def init(%{transport: transport, url: url, ref: ref}) do
-    with %URI{port: port, host: host, scheme: "rtsp"} = uri
-         when is_number(port) and is_binary(host) <- URI.parse(url),
-         {:ok, _pid} <- Supervisor.start_child(transport, ref, uri) do
-      %State{
-        transport: transport,
-        transport_executor: ref,
-        uri: uri
-      }
-      ~> {:ok, &1}
-    else
-      %URI{} -> {:stop, :invalid_uri}
-      {:error, reason} -> {:stop, reason}
-    end
+  def init(%{transport: transport, url: url, ref: ref, options: options}) do
+    %State{
+      transport: transport,
+      transport_executor: ref,
+      uri: url,
+      execution_options: options
+    }
+    ~> {:ok, &1}
   end
 
   @impl true
@@ -74,14 +70,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     end
   end
 
-  @impl true
-  def terminate(_reason, %State{transport_executor: transport_executor}) do
-    Registry.dispatch(TransportRegistry, transport_executor, fn [{transport_pid, _}] ->
-      Supervisor.terminate_child(transport_pid)
-    end)
-  end
-
-  defp perform_execution(request, %State{uri: uri} = state) do
+  defp perform_execution(request, %State{uri: uri, execution_options: options} = state) do
     %State{cseq: cseq, transport: transport, transport_executor: executor} = state
     transport_ref = Transport.transport_name(executor)
 
@@ -90,7 +79,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri)
     |> Request.to_string(uri)
-    |> transport.execute(transport_ref)
+    |> transport.execute(transport_ref, options)
   end
 
   defp apply_credentials(request, %URI{userinfo: nil}), do: request

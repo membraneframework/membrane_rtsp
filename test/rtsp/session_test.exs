@@ -40,6 +40,16 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
       end)
     end
 
+    test "returns an error if response has different session", %{
+      state: state
+    } do
+      resolver = fn _ -> {:error, :timeout} end
+      state = %Session.State{state | execution_options: [resolver: resolver]}
+
+      {:reply, {:error, :timeout}, ^state} =
+        Session.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
+    end
+
     test "preserves session_id", %{request: request, state: state} do
       state = %State{state | session_id: nil}
       session_id = "arbitrary_string"
@@ -74,46 +84,6 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
           "\r\nAuthorization: Basic #{encoded_credentials}\r\n"
         )
       end)
-    end
-  end
-
-  describe "Session when initializing" do
-    test "parses uri and spawns connection" do
-      ref = "ref"
-
-      assert {:ok, state} =
-               "rtsp://domain.net:554/vod/mp4:name.mov"
-               ~> %{url: &1, transport: Fake, ref: ref}
-               |> Session.init()
-
-      assert %Session.State{
-               cseq: 0,
-               session_id: nil,
-               transport: Fake,
-               transport_executor: ^ref,
-               uri: %URI{host: "domain.net", port: 554}
-             } = state
-    end
-
-    test "returns an error when uri does not contain host and port" do
-      assert {:stop, :invalid_uri} ==
-               "rtsp://:file.extension"
-               ~> %{url: &1, transport: Fake, ref: ""}
-               |> Session.init()
-    end
-  end
-
-  describe "Session when terminating" do
-    setup do
-      {:ok, session} = Session.start_link("rtsp://domain.net:554/vod/mp4:name.mov", Fake)
-      [session: session]
-    end
-
-    test "does nothing if connection is dead", %{session: session} do
-      assert Process.alive?(session)
-      Session.close(session)
-      :timer.sleep(1)
-      refute Process.alive?(session)
     end
   end
 end
