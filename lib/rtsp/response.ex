@@ -39,8 +39,8 @@ defmodule Membrane.Protocol.RTSP.Response do
             {:error, :invalid_status_code}
 
           {code, _} when is_number(code) ->
-            %__MODULE__{version: version, status: code}
-            ~> {:ok, {&1, rest}}
+            response = %__MODULE__{version: version, status: code}
+            {:ok, {response, rest}}
         end
 
       _ ->
@@ -51,6 +51,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   defp parse_headers(data, acc \\ [])
 
   defp parse_headers({response, "\r\n" <> rest}, acc) do
+    # TODO debunchigy
     acc
     |> Enum.reverse()
     ~> %__MODULE__{response | headers: &1}

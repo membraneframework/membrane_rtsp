@@ -10,12 +10,17 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
     Supervisor.start_link(__MODULE__, [transport, url, options])
   end
 
+  # TODO: Supervisor init does not makes possible to handle errors
   @impl true
   def init([transport, raw_url, options]) do
     case URI.parse(raw_url) do
       %URI{port: port, host: host, scheme: "rtsp"} = url
       when is_number(port) and is_binary(host) ->
-        ref = :os.system_time(:millisecond) |> to_string() ~> (&1 <> raw_url)
+        ref =
+          :millisecond
+          |> :os.system_time()
+          |> to_string()
+          ~> (&1 <> raw_url)
 
         children = [
           {Session, [transport, ref, url, options]},

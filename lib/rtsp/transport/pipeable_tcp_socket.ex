@@ -1,6 +1,12 @@
 defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   @moduledoc """
   Transport module that keeps connection open as long as session is active.
+
+
+  # TODO maybe move it somewhere
+  Supported options:
+    * timeout - time after request will be deemed missing and error shall
+    be returned.
   """
   use Bunch
   use GenServer

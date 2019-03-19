@@ -31,9 +31,9 @@ defmodule Membrane.Protocol.RTSP.MixProject do
       {:qex, "~> 0.5"},
       {:mockery, "~> 2.3.0", runtime: false},
       {:membrane_protocol_sdp,
-       github: "membraneframework/membrane-protocol-sdp", branch: "basic-sdp"}
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"},
+       github: "membraneframework/membrane-protocol-sdp", branch: "basic-sdp"},
+      {:ex_doc, "~> 0.19", only: :dev, runtime: false},
+      {:mix_test_watch, "~> 0.8", only: :dev, runtime: false}
     ]
   end
 end

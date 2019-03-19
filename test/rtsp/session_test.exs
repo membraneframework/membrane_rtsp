@@ -71,10 +71,8 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
       credentials = "login:password"
       encoded_credentials = credentials |> Base.encode64()
 
-      state =
-        "rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov"
-        |> URI.parse()
-        ~> %State{state | uri: &1}
+      parsed_uri = URI.parse("rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov")
+      state = %State{state | uri: parsed_uri}
 
       assert {:reply, {:ok, _}, state} = Session.handle_call({:execute, request}, nil, state)
 

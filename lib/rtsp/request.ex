@@ -1,7 +1,6 @@
 defmodule Membrane.Protocol.RTSP.Request do
   @enforce_keys [:method]
   defstruct @enforce_keys ++ [{:headers, []}, {:body, ""}, :path]
-  use Bunch
 
   @type t :: %__MODULE__{
           method: binary(),
@@ -27,7 +26,7 @@ defmodule Membrane.Protocol.RTSP.Request do
     |> apply_path(request)
   end
 
-  defp sanitize_uri(uri), do: uri ~> %URI{&1 | userinfo: nil}
+  defp sanitize_uri(uri), do: %URI{uri | userinfo: nil}
 
   defp apply_path(url, %__MODULE__{path: nil}), do: url
 
