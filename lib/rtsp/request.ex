@@ -1,6 +1,6 @@
 defmodule Membrane.Protocol.RTSP.Request do
   @moduledoc """
-  This module represents RTSP request.
+  This module represents RTSP 1.0 request.
   """
   @enforce_keys [:method]
   defstruct @enforce_keys ++ [{:headers, []}, {:body, ""}, :path]
@@ -34,23 +34,33 @@ defmodule Membrane.Protocol.RTSP.Request do
 
   ```
     iex> uri = URI.parse("rtsp://domain.net:554/path:movie.mov")
-    iex> Request.to_string(%Request{method: "DESCRIBE"}, uri)
+    iex> Request.stringify(%Request{method: "DESCRIBE"}, uri)
     "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
-    iex> Request.to_string(%Request{method: "PLAY", path: "trackID=2"}, uri)
+    iex> Request.stringify(%Request{method: "PLAY", path: "trackID=2"}, uri)
     "PLAY rtsp://domain.net:554/path:movie.mov/trackID=2 RTSP/1.0\\r\\n\\r\\n"
+
+    iex> uri = URI.parse("rtsp://user:password@domain.net:554/path:movie.mov")
+    iex> Request.stringify(%Request{method: "DESCRIBE"}, uri)
+    "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
 
   ```
   """
-  @spec to_string(t(), URI.t()) :: binary()
-  def to_string(%__MODULE__{method: method, headers: headers} = request, uri) do
-    method <>
-      " " <> process_uri(request, uri) <> " RTSP/1.0" <> render_headers(headers) <> "\r\n\r\n"
+  @spec stringify(t(), URI.t()) :: binary()
+  def stringify(%__MODULE__{method: method, headers: headers} = request, uri) do
+    Enum.join([
+      method,
+      " ",
+      process_uri(request, uri),
+      " RTSP/1.0",
+      render_headers(headers),
+      "\r\n\r\n"
+    ])
   end
 
   defp process_uri(request, uri) do
     uri
     |> sanitize_uri()
-    |> String.Chars.to_string()
+    |> to_string()
     |> apply_path(request)
   end
 
@@ -70,5 +80,5 @@ defmodule Membrane.Protocol.RTSP.Request do
     ~> ("\r\n" <> &1)
   end
 
-  defp header_to_string({header, value}), do: header <> ": " <> String.Chars.to_string(value)
+  defp header_to_string({header, value}), do: header <> ": " <> to_string(value)
 end

@@ -2,12 +2,11 @@ defmodule Membrane.Protocol.RTSP.Session do
   @moduledoc """
   This module is responsible for managing RTSP Session.
 
-  Handles request resolution and tracking of Session ID and CSeq
+  Handles request resolution and tracking of Session ID and CSeq.
   """
   use GenServer
 
-  alias Membrane.Protocol.RTSP.{Request, Response}
-  alias Membrane.Protocol.RTSP.Transport
+  alias Membrane.Protocol.RTSP.{Request, Response, Transport}
 
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
@@ -33,17 +32,40 @@ defmodule Membrane.Protocol.RTSP.Session do
     }
   end
 
-  def start_link(transport, ref, url, options) do
-    GenServer.start_link(__MODULE__, %{transport: transport, url: url, ref: ref, options: options})
+  @doc """
+  Starts and links session process.
+
+  Sets following properties of Session:
+    * transport - module that is responsible for executing request
+    * transport_executor - a reference (`Registry` key) that will be used
+    when executing request
+    * url - a base path for requests
+    * options - a keyword list that shall be passed when executing request over transport
+  """
+  @spec start_link(module(), binary(), binary(), Keyword.t()) :: GenServer.on_start()
+  def start_link(transport, transport_executor, url, options) do
+    GenServer.start_link(__MODULE__, %{
+      transport: transport,
+      url: url,
+      transport_executor: transport_executor,
+      options: options
+    })
   end
 
+  @doc """
+  Executes the request on a given session.
+
+  Before execution populates with default headers setting `Session`
+  and `User-Agent` header. If URI contains credentials they will also
+  be added unless `Authorization` header is present in request.
+  """
   @spec execute(pid(), Request.t(), non_neg_integer()) :: {:ok, Response.t()} | {:error, atom()}
   def execute(session, request, timeout \\ 5000) do
     GenServer.call(session, {:execute, request}, timeout)
   end
 
   @impl true
-  def init(%{transport: transport, url: url, ref: ref, options: options}) do
+  def init(%{transport: transport, url: url, transport_executor: ref, options: options}) do
     state = %State{
       transport: transport,
       transport_executor: ref,
@@ -57,10 +79,10 @@ defmodule Membrane.Protocol.RTSP.Session do
   @impl true
   def handle_call({:execute, request}, _from, %State{cseq: cseq} = state) do
     with {:ok, raw_response} <- perform_execution(request, state),
-         {:ok, parsed_respone} <- Response.parse(raw_response),
-         {:ok, state} <- handle_session_id(parsed_respone, state) do
+         {:ok, parsed_response} <- Response.parse(raw_response),
+         {:ok, state} <- handle_session_id(parsed_response, state) do
       state = %State{state | cseq: cseq + 1}
-      {:reply, {:ok, parsed_respone}, state}
+      {:reply, {:ok, parsed_response}, state}
     else
       {:error, _} = error -> {:reply, error, state}
     end
@@ -74,15 +96,21 @@ defmodule Membrane.Protocol.RTSP.Session do
     |> Request.with_header("CSeq", cseq)
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri)
-    |> Request.to_string(uri)
+    |> Request.stringify(uri)
     |> transport.execute(transport_ref, options)
   end
 
   defp apply_credentials(request, %URI{userinfo: nil}), do: request
 
-  defp apply_credentials(request, %URI{userinfo: info}) do
-    encoded = Base.encode64(info)
-    Request.with_header(request, "Authorization", "Basic " <> encoded)
+  defp apply_credentials(%Request{headers: headers} = request, %URI{userinfo: info}) do
+    case List.keyfind(headers, "Authorization", 0) do
+      {"Authorization", _} ->
+        request
+
+      _ ->
+        encoded = Base.encode64(info)
+        Request.with_header(request, "Authorization", "Basic " <> encoded)
+    end
   end
 
   # Some responses does not have to return Session ID

@@ -5,7 +5,7 @@ defmodule Membrane.Protocol.RTSP.IntegrationTest do
   alias Membrane.Protocol.RTSP.Request
 
   test "Remove me" do
-    query = SampleOptionsRequest.request() |> Request.to_string(SampleOptionsRequest.url())
+    query = SampleOptionsRequest.request() |> Request.stringify(SampleOptionsRequest.url())
 
     {:ok, socket} =
       :gen_tcp.connect("wowzaec2demo.streamlock.net" |> to_charlist(), 554, [

@@ -1,14 +1,13 @@
 defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   @moduledoc """
-  Transport module that keeps connection open as long as session is active.
+  This module implements Transport behaviour and transmits requests
+  over TCP Socket keeping connection until either session is closed
+  or connection is closed by server.
 
-
-  # TODO maybe move it somewhere
   Supported options:
-    * timeout - time after request will be deemed missing and error shall
-    be returned.
+    * timeout - time after request will be deemed missing and error
+    shall be returned.
   """
-  use Bunch
   use GenServer
   import Mockery.Macro
 
@@ -72,7 +71,6 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
     {:noreply, %State{state | connection: nil}}
   end
 
-  # TODO Wrap into mockable and test this behaviour
   @impl true
   def terminate(reason, state)
   def terminate(_, %State{connection: nil}), do: :ok
@@ -80,24 +78,15 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
   @spec execute_request(binary(), State.t()) :: {:ok, State.t()} | {:error, atom()}
   defp execute_request(request, %State{connection: nil, connection_info: connection_info} = state) do
-    # IO.inspect(request, label: "Request")
-
-    case open(connection_info) do
-      {:ok, pid} ->
-        state = %State{state | connection: pid}
-
-        execute_request(request, state)
-
-      # |> IO.inspect(label: "REsponse")
-
-      # TODO Handle this somewhere
-      {:error, _cause} = error ->
-        error
+    with {:ok, pid} <- open(connection_info) do
+      state = %State{state | connection: pid}
+      execute_request(request, state)
     end
   end
 
   defp execute_request(request, %State{connection: conn} = state) do
-    mockable(:gen_tcp).send(conn, request)
-    ~>> (:ok -> {:ok, state})
+    with :ok <- mockable(:gen_tcp).send(conn, request) do
+      {:ok, state}
+    end
   end
 end

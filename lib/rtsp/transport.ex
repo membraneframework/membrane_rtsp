@@ -1,15 +1,11 @@
 defmodule Membrane.Protocol.RTSP.Transport do
   @moduledoc """
-  s
+  This module represents Transport contract.
   """
   use Bunch
 
   @type transport_ref :: {:via, Registry, {TransportRegistry, binary()}}
 
-  @doc """
-  Synchronously executes given serialized request via transport process and returns
-  an `{:ok, result}` tuple with raw response or `{:error, reason}` tuple.
-  """
   @callback execute(request :: binary(), transport_ref, options :: [tuple()]) ::
               {:ok, binary()} | {:error, atom()}
 
@@ -20,6 +16,11 @@ defmodule Membrane.Protocol.RTSP.Transport do
     }
   end
 
+  @doc """
+  Starts and links Transport process.
+
+  Transport process is immediately registered in TransportRegistry via `Registry`.
+  """
   @spec start_link(module(), binary(), URI.t()) :: :ignore | {:error, any()} | {:ok, pid()}
   def start_link(module, ref, connection_info) do
     GenServer.start_link(module, connection_info, name: transport_name(ref))

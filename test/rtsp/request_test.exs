@@ -1,16 +1,16 @@
 defmodule Membrane.Protocol.RTSP.RequestTest do
   use ExUnit.Case
-  use Bunch
 
-  alias Membrane.Support.Factory
   alias Membrane.Protocol.RTSP.Request
+  alias Membrane.Support.Factory
+  doctest Request
 
   describe "Renders request properly" do
     test "when path is not set" do
-      uri = "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov"
+      uri = "rtsp://domain.net:554/path:file.mov"
 
       expected_result = """
-      DESCRIBE rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0
+      DESCRIBE rtsp://domain.net:554/path:file.mov RTSP/1.0
       CSeq: 3
       """
 
@@ -41,14 +41,7 @@ defmodule Membrane.Protocol.RTSP.RequestTest do
     test "for method OPTIONS" do
       assert Factory.SampleOptionsRequest.raw() ==
                Factory.SampleOptionsRequest.request()
-               |> Request.to_string(Factory.SampleOptionsRequest.url())
-    end
-  end
-
-  describe "Request utility" do
-    test "with_header adds header" do
-      assert %Request{method: "OPTIONS", headers: [{"name", "value"}]} ==
-               %Request{method: "OPTIONS"} |> Request.with_header("name", "value")
+               |> Request.stringify(Factory.SampleOptionsRequest.url())
     end
   end
 
@@ -58,10 +51,9 @@ defmodule Membrane.Protocol.RTSP.RequestTest do
     expected_result =
       expected_result
       |> String.replace("\n", "\r\n")
-      ~> (&1 <> "\r\n")
 
-    assert expected_result ==
+    assert expected_result <> "\r\n" ==
              request
-             |> Request.to_string(uri)
+             |> Request.stringify(uri)
   end
 end
