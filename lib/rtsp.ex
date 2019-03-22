@@ -1,10 +1,18 @@
 defmodule Membrane.Protocol.RTSP do
   @moduledoc """
-  #TODO write first paragraph
+  This module provides functionality to execute open and close session
+  and execute RTSP requests.
+
+  In order to execute a given request you have to start the session first
+  by calling `start/3`.
 
   ```
-  {:ok, session} = RTSP.start("rtsp://domain.name:port/path")
+  iex> {:ok, session} = RTSP.start("rtsp://domain.name:port/path")
+  {:ok, %RTSP{}}
   ```
+
+  then you can proceed with calling
+
   """
   alias Membrane.Protocol.RTSP.{Request, Response, Session}
   alias Membrane.Protocol.RTSP.Transport.PipeableTCPSocket
@@ -26,13 +34,15 @@ defmodule Membrane.Protocol.RTSP do
   def start(url, transport \\ PipeableTCPSocket, options \\ []) do
     with {:ok, supervisor} <- Session.Supervisor.start_child(transport, url, options) do
       {Session, session_pid, _, _} =
-        Supervisor.which_children(supervisor)
+        supervisor
+        |> Supervisor.which_children()
         |> List.keyfind(Session, 0)
 
       {:ok, %__MODULE__{session: session_pid, container: supervisor}}
     end
   end
 
+  @spec close(Membrane.Protocol.RTSP.t()) :: :ok | {:error, atom()}
   def close(%__MODULE__{container: container}) do
     Session.Supervisor.terminate_child(container)
   end

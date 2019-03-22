@@ -1,18 +1,22 @@
 defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
+  @moduledoc """
+  This module serves as a container for spawning Session and Transport combination.
+
+  Session and Transport live together. They start their lifecycle together,
+  they work together, they are constantly communicating with each other and
+  they die together as well.
+  """
   use Supervisor
   use Bunch
 
   alias Membrane.Protocol.RTSP.Session
   alias Membrane.Protocol.RTSP.Transport
 
-  @spec start_link(module(), binary(), Keyword.t()) :: :ignore | {:error, any()} | {:ok, pid()}
-  def start_link(transport, url, options) do
-    Supervisor.start_link(__MODULE__, [transport, url, options])
-  end
-
-  # TODO: Supervisor init does not makes possible to handle errors
-  @impl true
-  def init([transport, raw_url, options]) do
+  @doc """
+  Starts and links process that supervises Session and companion Transport process.
+  """
+  @spec start_link(module(), binary(), Keyword.t()) :: Supervisor.on_start()
+  def start_link(transport, raw_url, options) do
     case URI.parse(raw_url) do
       %URI{port: port, host: host, scheme: "rtsp"} = url
       when is_number(port) and is_binary(host) ->
@@ -22,15 +26,20 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
           |> to_string()
           ~> (&1 <> raw_url)
 
-        children = [
-          {Session, [transport, ref, url, options]},
-          {Transport, [transport, ref, url]}
-        ]
-
-        Supervisor.init(children, strategy: :one_for_one)
+        Supervisor.start_link(__MODULE__, [transport, ref, url, options])
 
       _ ->
         {:stop, :invalid_url}
     end
+  end
+
+  @impl true
+  def init([transport, ref, url, options]) do
+    children = [
+      {Session, [transport, ref, url, options]},
+      {Transport, [transport, ref, url]}
+    ]
+
+    Supervisor.init(children, strategy: :one_for_one)
   end
 end

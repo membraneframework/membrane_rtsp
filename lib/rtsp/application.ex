@@ -1,4 +1,5 @@
 defmodule Membrane.Protocol.RTSP.Application do
+  @moduledoc false
   use Application
 
   alias Membrane.Protocol.RTSP.Session

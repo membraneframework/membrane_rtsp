@@ -1,6 +1,10 @@
 defmodule Membrane.Protocol.RTSP.Request do
+  @moduledoc """
+  This module represents RTSP request.
+  """
   @enforce_keys [:method]
   defstruct @enforce_keys ++ [{:headers, []}, {:body, ""}, :path]
+  use Bunch
 
   @type t :: %__MODULE__{
           method: binary(),
@@ -9,14 +13,38 @@ defmodule Membrane.Protocol.RTSP.Request do
           path: nil | binary()
         }
 
+  @doc """
+  Attaches header to a RTSP request struct.
+
+  ```
+    iex> Request.with_header(%Request{method: "DESCRIBE"}, "header_name", "header_value")
+    %Request{method: "DESCRIBE", headers: [{"header_name","header_value"}]}
+
+  ```
+  """
   @spec with_header(t(), binary(), binary()) :: t()
   def with_header(%__MODULE__{headers: headers} = request, name, value),
     do: %__MODULE__{request | headers: [{name, value} | headers]}
 
+  @doc """
+  Renders the a RTSP request struct into a binary that is valid
+  RTSP request string that can be transmitted via communication channel.
+
+  Access credentials won't be rendered into url present in RTSP start line.
+
+  ```
+    iex> uri = URI.parse("rtsp://domain.net:554/path:movie.mov")
+    iex> Request.to_string(%Request{method: "DESCRIBE"}, uri)
+    "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
+    iex> Request.to_string(%Request{method: "PLAY", path: "trackID=2"}, uri)
+    "PLAY rtsp://domain.net:554/path:movie.mov/trackID=2 RTSP/1.0\\r\\n\\r\\n"
+
+  ```
+  """
   @spec to_string(t(), URI.t()) :: binary()
   def to_string(%__MODULE__{method: method, headers: headers} = request, uri) do
     method <>
-      " " <> process_uri(request, uri) <> " RTSP/1.0\r\n" <> render_headers(headers) <> "\r\n\r\n"
+      " " <> process_uri(request, uri) <> " RTSP/1.0" <> render_headers(headers) <> "\r\n\r\n"
   end
 
   defp process_uri(request, uri) do
@@ -33,12 +61,14 @@ defmodule Membrane.Protocol.RTSP.Request do
   defp apply_path(url, %__MODULE__{path: path}),
     do: Path.join(url, path)
 
-  defp header_to_string({header, value}), do: header <> ": " <> String.Chars.to_string(value)
   defp render_headers([]), do: ""
 
   defp render_headers(list) do
     list
     |> Enum.map(fn elem -> header_to_string(elem) end)
     |> Enum.join("\r\n")
+    ~> ("\r\n" <> &1)
   end
+
+  defp header_to_string({header, value}), do: header <> ": " <> String.Chars.to_string(value)
 end

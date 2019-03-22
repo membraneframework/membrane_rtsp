@@ -10,12 +10,16 @@ Currently supports only RTSP 1.1 defined by
 To use Membrane Protocol RTSP client you must first start a session:
 
 ```elixir
+alias Membrane.Protocol.RTSP
+
 {:ok, session} = RTSP.start("rtsp://domain.name:port/path")
 ```
 
 Then you can proceed with executing requests:
 
 ```elixir
+alias Membrane.Protocol.RTSP.Response
+
 {:ok, %Response{status: 200}} = RTSP.describe(session)
 
 {:ok, %Response{status: 200}} =
@@ -29,6 +33,11 @@ Then you can proceed with executing requests:
   ])
 
 {:ok, %Response{status: 200}} = RTSP.play(session)
+```
+
+Session is closed with system shutdown or by calling:
+```elixir
+:ok = RTSP.close(session)
 ```
 
 ## Implementing custom transport layer
