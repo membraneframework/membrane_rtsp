@@ -44,9 +44,9 @@ Session is closed with system shutdown or by calling:
 
 To implement custom request execution logic you must implement
 `Membrane.Protocol.RTSP.Transport` behaviour. Then you can pass
-name of your transport module to `RTSP.start/3` as second argument.
+name of your transport module to `Membrane.Protocol.RTSP.start/3` as second argument.
 
-`RTSP.start/3` assumes that transport module also implements GenServer
+`Membrane.Protocol.RTSP.start/3` assumes that transport module also implements GenServer
 behaviour.
 
 ## Installation

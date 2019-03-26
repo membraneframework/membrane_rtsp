@@ -36,8 +36,14 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
   @impl true
   def init([transport, ref, url, options]) do
     children = [
-      {Session, [transport, ref, url, options]},
-      {Transport, [transport, ref, url]}
+      %{
+        id: Session,
+        start: {Session, :start_link, [transport, ref, url, options]}
+      },
+      %{
+        id: Transport,
+        start: {Transport, :start_link, [transport, ref, url]}
+      }
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

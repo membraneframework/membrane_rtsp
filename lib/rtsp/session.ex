@@ -25,13 +25,6 @@ defmodule Membrane.Protocol.RTSP.Session do
           }
   end
 
-  def child_spec(args) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, args}
-    }
-  end
-
   @doc """
   Starts and links session process.
 

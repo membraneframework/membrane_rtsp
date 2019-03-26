@@ -6,15 +6,17 @@ defmodule Membrane.Protocol.RTSP.Request do
   defstruct @enforce_keys ++ [{:headers, []}, {:body, ""}, :path]
   use Bunch
 
+  alias Membrane.Protocol.RTSP
+
   @type t :: %__MODULE__{
           method: binary(),
           body: binary(),
-          headers: [{binary(), binary()}],
+          headers: RTSP.headers(),
           path: nil | binary()
         }
 
   @doc """
-  Attaches header to a RTSP request struct.
+  Attaches a header to a RTSP request struct.
 
   ```
     iex> Request.with_header(%Request{method: "DESCRIBE"}, "header_name", "header_value")

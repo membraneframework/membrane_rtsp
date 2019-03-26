@@ -6,15 +6,11 @@ defmodule Membrane.Protocol.RTSP.Transport do
 
   @type transport_ref :: {:via, Registry, {TransportRegistry, binary()}}
 
+  @doc """
+  Invoked by session process when executing requests.
+  """
   @callback execute(request :: binary(), transport_ref, options :: [tuple()]) ::
               {:ok, binary()} | {:error, atom()}
-
-  def child_spec(args) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, args}
-    }
-  end
 
   @doc """
   Starts and links Transport process.
