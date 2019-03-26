@@ -15,13 +15,14 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   @default_timeout 5000
 
   defmodule State do
-    @enforce_keys [:queue, :connection_info]
-    defstruct @enforce_keys ++ [:connection]
+    @moduledoc false
+    @enforce_keys [:connection_info]
+    defstruct @enforce_keys ++ [:connection, :caller]
 
     @type t :: %__MODULE__{
             connection_info: URI.t(),
             connection: :gen_tcp.socket() | nil,
-            queue: Qex.t(pid())
+            caller: pid() | nil
           }
   end
 
@@ -33,13 +34,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
   @impl true
   def init(%URI{} = connection_info) do
-    state = %State{
-      connection_info: connection_info,
-      connection: nil,
-      queue: Qex.new()
-    }
-
-    {:ok, state}
+    {:ok, %State{connection_info: connection_info}}
   end
 
   @spec open(URI.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
@@ -48,11 +43,10 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   end
 
   @impl true
-  def handle_call({:execute, request}, caller, %State{queue: queue} = state) do
+  def handle_call({:execute, request}, caller, state) do
     case execute_request(request, state) do
       {:ok, state} ->
-        state = %State{state | queue: Qex.push(queue, caller)}
-        {:noreply, state}
+        {:noreply, %State{state | caller: caller}}
 
       {:error, _} = error ->
         {:reply, error, state}
@@ -60,10 +54,9 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
   end
 
   @impl true
-  def handle_info({:tcp, _socket, data}, %State{queue: queue} = state) do
-    {sender, queue} = Qex.pop_back!(queue)
-    GenServer.reply(sender, {:ok, data})
-    {:noreply, %State{state | queue: queue}}
+  def handle_info({:tcp, _socket, data}, %State{caller: caller} = state) do
+    GenServer.reply(caller, {:ok, data})
+    {:noreply, %State{state | caller: nil}}
   end
 
   def handle_info({:tcp_closed, _socket}, state) do

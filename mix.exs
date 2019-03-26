@@ -1,21 +1,34 @@
 defmodule Membrane.Protocol.RTSP.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :membrane_protocol_rtsp,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.7",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      docs: docs()
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: ["README.md"],
+      source_ref: "v#{@version}",
+      nest_modules_by_prefix: [
+        Membrane.Protocol.RTSP
+      ]
     ]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_env), do: ["lib"]
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger],
@@ -23,12 +36,10 @@ defmodule Membrane.Protocol.RTSP.MixProject do
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       {:bunch, "~> 0.3"},
       {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
-      {:qex, "~> 0.5"},
       {:mockery, "~> 2.3.0", runtime: false},
       {:membrane_protocol_sdp,
        github: "membraneframework/membrane-protocol-sdp", branch: "basic-sdp"},

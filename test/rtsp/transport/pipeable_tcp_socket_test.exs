@@ -11,7 +11,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
         host: "test.com",
         path: "/"
       },
-      queue: Qex.new()
+      caller: nil
     }
 
     [state: state]
@@ -30,7 +30,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
                 %PipeableTCPSocket.State{
                   connection: nil,
                   connection_info: info,
-                  queue: Qex.new()
+                  caller: nil
                 }}
     end
 
@@ -41,11 +41,11 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
       assert {:noreply,
               %Membrane.Protocol.RTSP.Transport.PipeableTCPSocket.State{
                 connection: conn,
-                queue: queue
+                caller: caller
               }} = PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
 
       assert_called(:gen_tcp, :connect)
-      assert Qex.first!(queue) == self()
+      assert caller == self()
     end
 
     test "uses already open connection if possible", %{state: state} do
@@ -57,11 +57,11 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
 
       assert %Membrane.Protocol.RTSP.Transport.PipeableTCPSocket.State{
                connection: conn,
-               queue: queue
+               caller: caller
              } = result_state
 
       refute_called(:gen_tco, :connect)
-      assert Qex.first!(queue) == self()
+      assert caller == self()
     end
 
     test "marks connection as dead when when received tcp_closed message", %{state: state} do
@@ -72,7 +72,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
     test "replies to most recent sender when received tcp message", %{state: state} do
       sample = "RTSP/1.0 200 OK"
       self_client = {self(), :tag}
-      state = %{state | queue: Qex.new() |> Qex.push(self_client)}
+      state = %{state | caller: self_client}
       assert {:noreply, state} = PipeableTCPSocket.handle_info({:tcp, :socket, sample}, state)
       assert state = %PipeableTCPSocket.State{state | connection: nil}
       assert_received {:tag, {:ok, ^sample}}
