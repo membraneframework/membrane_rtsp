@@ -2,7 +2,7 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
   use ExUnit.Case
   use Bunch
 
-  alias Membrane.Protocol.RTSP.{Transport, Request, Session}
+  alias Membrane.Protocol.RTSP.{Request, Session, Transport}
   alias Membrane.Protocol.RTSP.Session.State
   alias Membrane.Protocol.RTSP.Transport.Fake
 

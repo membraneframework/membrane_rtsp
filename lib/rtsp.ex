@@ -16,7 +16,6 @@ defmodule Membrane.Protocol.RTSP do
   """
   alias Membrane.Protocol.RTSP.{Request, Response, Session}
   alias Membrane.Protocol.RTSP.Transport.PipeableTCPSocket
-  alias Membrane.Protocol.RTSP.Session
 
   @enforce_keys [:session, :container]
   defstruct @enforce_keys

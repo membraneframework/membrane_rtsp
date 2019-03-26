@@ -4,7 +4,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
 
   alias Membrane.Protocol.RTSP
   alias Membrane.Protocol.RTSP.Response
-  alias Membrane.Protocol.RTSP.Transport.{PipeableTCPSocket, Fake}
+  alias Membrane.Protocol.RTSP.Transport.{Fake, PipeableTCPSocket}
 
   describe "RTSP workflow executes" do
     @tag external: true
@@ -46,7 +46,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
     ~> ({^request, response} -> response)
   end
 
-  defp request_mappings() do
+  defp request_mappings do
     [
       {"DESCRIBE rtsp://domain.net:554/vod/mp4:mobvie.mov RTSP/1.0\r\nUser-Agent: MembraneRTSP/0.1.0 (Membrane Framework RTSP Client)\r\nCSeq: 0\r\n\r\n",
        {:ok,

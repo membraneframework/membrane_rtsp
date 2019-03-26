@@ -1,7 +1,7 @@
 defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisorTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP.{Transport, Session}
+  alias Membrane.Protocol.RTSP.{Session, Transport}
   alias Membrane.Protocol.RTSP.Session.CoupleSupervisor
 
   @parsed_uri %URI{

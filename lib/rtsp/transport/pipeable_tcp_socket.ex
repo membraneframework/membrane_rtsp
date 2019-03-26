@@ -54,7 +54,6 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
         state = %State{state | queue: Qex.push(queue, caller)}
         {:noreply, state}
 
-      # TODO: Handle error properly
       {:error, _} = error ->
         {:reply, error, state}
     end

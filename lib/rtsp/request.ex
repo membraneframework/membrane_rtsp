@@ -30,18 +30,21 @@ defmodule Membrane.Protocol.RTSP.Request do
   Renders the a RTSP request struct into a binary that is valid
   RTSP request string that can be transmitted via communication channel.
 
+  ```
+  iex> uri = URI.parse("rtsp://domain.net:554/path:movie.mov")
+  iex> Request.stringify(%Request{method: "DESCRIBE"}, uri)
+  "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
+  iex> Request.stringify(%Request{method: "PLAY", path: "trackID=2"}, uri)
+  "PLAY rtsp://domain.net:554/path:movie.mov/trackID=2 RTSP/1.0\\r\\n\\r\\n"
+
+  ```
+
   Access credentials won't be rendered into url present in RTSP start line.
 
   ```
-    iex> uri = URI.parse("rtsp://domain.net:554/path:movie.mov")
-    iex> Request.stringify(%Request{method: "DESCRIBE"}, uri)
-    "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
-    iex> Request.stringify(%Request{method: "PLAY", path: "trackID=2"}, uri)
-    "PLAY rtsp://domain.net:554/path:movie.mov/trackID=2 RTSP/1.0\\r\\n\\r\\n"
-
-    iex> uri = URI.parse("rtsp://user:password@domain.net:554/path:movie.mov")
-    iex> Request.stringify(%Request{method: "DESCRIBE"}, uri)
-    "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
+  iex> uri = URI.parse("rtsp://user:password@domain.net:554/path:movie.mov")
+  iex> Request.stringify(%Request{method: "DESCRIBE"}, uri)
+  "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
 
   ```
   """
@@ -58,13 +61,10 @@ defmodule Membrane.Protocol.RTSP.Request do
   end
 
   defp process_uri(request, uri) do
-    uri
-    |> sanitize_uri()
+    %URI{uri | userinfo: nil}
     |> to_string()
     |> apply_path(request)
   end
-
-  defp sanitize_uri(uri), do: %URI{uri | userinfo: nil}
 
   defp apply_path(url, %__MODULE__{path: nil}), do: url
 
