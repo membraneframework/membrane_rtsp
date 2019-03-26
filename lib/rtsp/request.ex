@@ -3,7 +3,7 @@ defmodule Membrane.Protocol.RTSP.Request do
   This module represents RTSP 1.0 request.
   """
   @enforce_keys [:method]
-  defstruct @enforce_keys ++ [{:headers, []}, {:body, ""}, :path]
+  defstruct @enforce_keys ++ [:path, headers: [], body: ""]
   use Bunch
 
   alias Membrane.Protocol.RTSP

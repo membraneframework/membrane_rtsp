@@ -13,7 +13,7 @@ defmodule Membrane.Protocol.RTSP.Session do
   defmodule State do
     @moduledoc false
     @enforce_keys [:transport, :uri, :transport_executor]
-    defstruct @enforce_keys ++ [{:cseq, 0}, :session_id, {:execution_options, []}]
+    defstruct @enforce_keys ++ [:session_id, cseq: 0, execution_options: []]
 
     @type t :: %__MODULE__{
             transport: module(),

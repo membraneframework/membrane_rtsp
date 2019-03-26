@@ -7,7 +7,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/
 
   @enforce_keys [:status, :version]
-  defstruct @enforce_keys ++ [{:headers, []}, {:body, ""}]
+  defstruct @enforce_keys ++ [headers: [], body: ""]
 
   alias Membrane.Protocol.SDP
 
@@ -22,7 +22,7 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   Requires raw response to be `\\r\\n` delimited. If body is present
   it will be parsed according to `Content-Type` header. Currently
-  only `application/sdp` is supported.
+  only the `application/sdp` is supported.
   """
   @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | :malformed_header}
   def parse(response) do
@@ -98,6 +98,8 @@ defmodule Membrane.Protocol.RTSP.Response do
     end
   end
 
+  defp split_next_chunk(response), do: String.split(response, "\r\n", parts: 2)
+
   @spec parse_body({t(), raw_body :: binary}) :: {:ok, t()} | {:error, atom()}
   defp parse_body({%__MODULE__{headers: headers} = response, data}) do
     case List.keyfind(headers, "Content-Type", 0) do
@@ -110,6 +112,4 @@ defmodule Membrane.Protocol.RTSP.Response do
         {:ok, %__MODULE__{response | body: data}}
     end
   end
-
-  defp split_next_chunk(response), do: String.split(response, "\r\n", parts: 2)
 end
