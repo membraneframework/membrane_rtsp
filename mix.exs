@@ -38,7 +38,7 @@ defmodule Membrane.Protocol.RTSP.MixProject do
 
   defp deps do
     [
-      {:bunch, "~> 0.3"},
+      {:bunch, "~> 1.0"},
       {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
       {:mockery, "~> 2.3.0", runtime: false},
       {:membrane_protocol_sdp,
