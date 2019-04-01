@@ -25,11 +25,12 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
     [state: state, request: request, ref: ref]
   end
 
-  describe "Session when executing request" do
-    test "increments cseq every successful request and adds default headers", %{
-      state: state,
-      request: request
-    } do
+  describe "Session when executing a request" do
+    test """
+         adds default headers and increments cseq every time a request is \
+         resolved successfully\
+         """,
+         %{state: state, request: request} do
       mock(Fake, :proxy, nil)
 
       assert {:reply, {:ok, _}, next_state} = Session.handle_call({:execute, request}, nil, state)

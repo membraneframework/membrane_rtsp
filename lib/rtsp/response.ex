@@ -1,8 +1,7 @@
 defmodule Membrane.Protocol.RTSP.Response do
   @moduledoc """
-  This module represents RTSP response.
+  This module represents a RTSP response.
   """
-  use Bunch
 
   @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/
 
@@ -20,7 +19,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   @doc """
   Parses RTSP response.
 
-  Requires raw response to be `\\r\\n` delimited. If body is present
+  Requires a raw response to be `\\r\\n` delimited. If the body is present
   it will be parsed according to `Content-Type` header. Currently
   only the `application/sdp` is supported.
   """
@@ -104,9 +103,9 @@ defmodule Membrane.Protocol.RTSP.Response do
   defp parse_body({%__MODULE__{headers: headers} = response, data}) do
     case List.keyfind(headers, "Content-Type", 0) do
       {"Content-Type", "application/sdp"} ->
-        data
-        |> SDP.parse()
-        ~>> ({:ok, result} -> {:ok, %__MODULE__{response | body: result}})
+        with {:ok, result} <- SDP.parse(data) do
+          {:ok, %__MODULE__{response | body: result}}
+        end
 
       _ ->
         {:ok, %__MODULE__{response | body: data}}

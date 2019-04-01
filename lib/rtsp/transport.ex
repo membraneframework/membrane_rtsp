@@ -1,6 +1,6 @@
 defmodule Membrane.Protocol.RTSP.Transport do
   @moduledoc """
-  This module represents Transport contract.
+  This module represents the Transport contract.
   """
   use Bunch
 
@@ -15,7 +15,8 @@ defmodule Membrane.Protocol.RTSP.Transport do
   @doc """
   Starts and links Transport process.
 
-  Transport process is immediately registered in TransportRegistry via `Registry`.
+  The transport process is immediately registered in the TransportRegistry via
+  `Registry`.
   """
   @spec start_link(module(), binary(), URI.t()) :: :ignore | {:error, any()} | {:ok, pid()}
   def start_link(module, ref, connection_info) do

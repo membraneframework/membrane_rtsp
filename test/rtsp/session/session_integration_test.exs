@@ -2,9 +2,8 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   use ExUnit.Case, async: false
   use Bunch
   alias Membrane.Protocol.RTSP
-  alias Membrane.Protocol.RTSP.Session
   alias Membrane.Protocol.RTSP.Transport.{Fake, PipeableTCPSocket}
-  alias Membrane.Protocol.RTSP.{Request, Response}
+  alias Membrane.Protocol.RTSP.{Request, Response, Session}
   alias Membrane.Protocol.SDP
 
   @expected_query """
@@ -59,7 +58,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
            ] = headers
 
     assert %SDP.Session{} = body
-    RTSP.close(rtsp)
+    assert :ok == RTSP.close(rtsp)
   end
 
   def resolver(@expected_query) do

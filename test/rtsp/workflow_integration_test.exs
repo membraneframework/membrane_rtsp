@@ -1,6 +1,5 @@
 defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
   use ExUnit.Case
-  use Bunch
 
   alias Membrane.Protocol.RTSP
   alias Membrane.Protocol.RTSP.Response
@@ -41,9 +40,8 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
   end
 
   def resolver(request) do
-    request_mappings()
-    |> List.keyfind(request, 0)
-    ~> ({^request, response} -> response)
+    {_request, response} = List.keyfind(request_mappings(), request, 0)
+    response
   end
 
   defp request_mappings do

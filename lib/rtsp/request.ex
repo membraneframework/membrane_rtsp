@@ -1,6 +1,6 @@
 defmodule Membrane.Protocol.RTSP.Request do
   @moduledoc """
-  This module represents RTSP 1.0 request.
+  This module represents a RTSP 1.0 request.
   """
   @enforce_keys [:method]
   defstruct @enforce_keys ++ [:path, headers: [], body: ""]
@@ -29,7 +29,7 @@ defmodule Membrane.Protocol.RTSP.Request do
     do: %__MODULE__{request | headers: [{name, value} | headers]}
 
   @doc """
-  Renders the a RTSP request struct into a binary that is valid
+  Renders the a RTSP request struct into a binary that is a valid
   RTSP request string that can be transmitted via communication channel.
 
   ```
@@ -41,7 +41,7 @@ defmodule Membrane.Protocol.RTSP.Request do
 
   ```
 
-  Access credentials won't be rendered into url present in RTSP start line.
+  Access credentials won't be rendered into an url present in a RTSP start line.
 
   ```
   iex> uri = URI.parse("rtsp://user:password@domain.net:554/path:movie.mov")

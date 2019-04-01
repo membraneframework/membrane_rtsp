@@ -37,7 +37,7 @@ alias Membrane.Protocol.RTSP.Response
 
 Session is closed with system shutdown or by calling:
 ```elixir
-:ok = RTSP.close(session)
+RTSP.close(session)
 ```
 
 ## Implementing custom transport layer

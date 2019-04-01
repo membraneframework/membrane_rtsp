@@ -48,8 +48,8 @@ defmodule Membrane.Protocol.RTSP.Session do
   @doc """
   Executes the request on a given session.
 
-  Before execution populates with default headers setting `Session`
-  and `User-Agent` header. If URI contains credentials they will also
+  Before execution populates with a default headers setting `Session`
+  and `User-Agent` header. If the URI contains credentials they will also
   be added unless `Authorization` header is present in request.
   """
   @spec execute(pid(), Request.t(), non_neg_integer()) :: {:ok, Response.t()} | {:error, atom()}

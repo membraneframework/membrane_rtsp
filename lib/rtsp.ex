@@ -1,7 +1,7 @@
 defmodule Membrane.Protocol.RTSP do
   @moduledoc """
-  This module provides functionality to execute open and close session
-  and execute RTSP requests.
+  This module provides a functionality to open a sessi on, execute a RTSP requests
+  through that session and close the session.
   """
   alias Membrane.Protocol.RTSP.{Request, Response, Session}
   alias Membrane.Protocol.RTSP.Transport.PipeableTCPSocket
