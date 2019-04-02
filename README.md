@@ -44,14 +44,15 @@ RTSP.close(session)
 
 To implement custom request execution logic you must implement
 `Membrane.Protocol.RTSP.Transport` behaviour. Then you can pass
-name of your transport module to `Membrane.Protocol.RTSP.start/3` as second argument.
+name of your transport module to `Membrane.Protocol.RTSP.start/3` as second
+ argument.
 
-`Membrane.Protocol.RTSP.start/3` assumes that transport module also implements GenServer
-behaviour.
+`Membrane.Protocol.RTSP.start/3` assumes that transport module also implements
+GenServer behaviour.
 
 ## Installation
 
-The package can be installed by adding `membrane_rtsp` to your list 
+The package can be installed by adding `membrane_rtsp` to your list
 of dependencies in `mix.exs`:
 
 ```elixir
@@ -64,3 +65,8 @@ end
 
 The docs can be found at [https://hexdocs.pm/membrane_protocol_rtsp](https://hexdocs.pm/membrane_protocol_rtsp).
 
+## External tests
+
+Tests that use external RTSP service are disabled by default but they are present
+in the codebase. They are tagged as external and are usually accompanied by
+tests that mimic they behaviour by using predefined responses.
