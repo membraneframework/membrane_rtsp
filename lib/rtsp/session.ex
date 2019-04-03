@@ -86,7 +86,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     transport_ref = Transport.transport_name(executor)
 
     request
-    |> Request.with_header("CSeq", cseq)
+    |> Request.with_header("CSeq", cseq |> to_string())
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri)
     |> Request.stringify(uri)

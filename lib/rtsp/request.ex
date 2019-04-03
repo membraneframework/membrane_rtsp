@@ -4,7 +4,6 @@ defmodule Membrane.Protocol.RTSP.Request do
   """
   @enforce_keys [:method]
   defstruct @enforce_keys ++ [:path, headers: [], body: ""]
-  use Bunch
 
   alias Membrane.Protocol.RTSP
 
@@ -25,8 +24,9 @@ defmodule Membrane.Protocol.RTSP.Request do
   ```
   """
   @spec with_header(t(), binary(), binary()) :: t()
-  def with_header(%__MODULE__{headers: headers} = request, name, value),
-    do: %__MODULE__{request | headers: [{name, value} | headers]}
+  def with_header(%__MODULE__{headers: headers} = request, name, value)
+      when is_binary(name) and is_binary(value),
+      do: %__MODULE__{request | headers: [{name, value} | headers]}
 
   @doc """
   Renders the a RTSP request struct into a binary that is a valid
@@ -77,10 +77,9 @@ defmodule Membrane.Protocol.RTSP.Request do
 
   defp render_headers(list) do
     list
-    |> Enum.map(fn elem -> header_to_string(elem) end)
-    |> Enum.join("\r\n")
-    ~> ("\r\n" <> &1)
+    |> Enum.map_join("\r\n", fn elem -> header_to_string(elem) end)
+    |> String.replace_prefix("", "\r\n")
   end
 
-  defp header_to_string({header, value}), do: header <> ": " <> to_string(value)
+  defp header_to_string({header, value}), do: header <> ": " <> value
 end

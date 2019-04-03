@@ -92,7 +92,7 @@ defmodule Membrane.Protocol.RTSP.Response do
     [line, rest] = split_next_chunk(binary)
 
     case String.split(line, ":", parts: 2) do
-      [name, " " <> value | []] -> parse_headers({response, rest}, [{name, value} | acc])
+      [name, " " <> value] -> parse_headers({response, rest}, [{name, value} | acc])
       _ -> {:error, {:malformed_header, line}}
     end
   end

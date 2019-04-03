@@ -37,11 +37,6 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
     {:ok, %State{connection_info: connection_info}}
   end
 
-  @spec open(URI.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
-  defp open(%URI{host: host, port: port}) do
-    mockable(:gen_tcp).connect(to_charlist(host), port, [:binary, {:active, true}])
-  end
-
   @impl true
   def handle_call({:execute, request}, caller, state) do
     case execute_request(request, state) do
@@ -63,10 +58,10 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
     {:noreply, %State{state | connection: nil}}
   end
 
-  @impl true
-  def terminate(reason, state)
-  def terminate(_, %State{connection: nil}), do: :ok
-  def terminate(_, %State{connection: connection}), do: mockable(:gen_tcp).close(connection)
+  @spec open(URI.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
+  defp open(%URI{host: host, port: port}) do
+    mockable(:gen_tcp).connect(to_charlist(host), port, binary: {:active, true})
+  end
 
   @spec execute_request(binary(), State.t()) :: {:ok, State.t()} | {:error, atom()}
   defp execute_request(request, %State{connection: nil, connection_info: connection_info} = state) do

@@ -9,7 +9,7 @@ defmodule Membrane.Protocol.RTSP.Transport do
   @doc """
   Invoked by session process when executing requests.
   """
-  @callback execute(request :: binary(), transport_ref, options :: [tuple()]) ::
+  @callback execute(request :: binary(), transport_ref, options :: [Keyword.t()]) ::
               {:ok, binary()} | {:error, atom()}
 
   @doc """

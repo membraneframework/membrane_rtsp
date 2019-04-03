@@ -93,19 +93,4 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
                PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
     end
   end
-
-  describe "Pipeable TCP Socket when terminating" do
-    test "closes open connection", %{state: state} do
-      mock(:gen_tcp, :close, :ok)
-      state = %PipeableTCPSocket.State{state | connection: :connection}
-
-      assert :ok == PipeableTCPSocket.terminate(:shutdown, state)
-      assert_called(:gen_tcp, :close, [:connection])
-    end
-
-    test "ignores closed connection", %{state: state} do
-      state = %PipeableTCPSocket.State{state | connection: nil}
-      assert :ok == PipeableTCPSocket.terminate(:shutdown, state)
-    end
-  end
 end

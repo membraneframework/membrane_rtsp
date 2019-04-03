@@ -36,6 +36,7 @@ alias Membrane.Protocol.RTSP.Response
 ```
 
 Session is closed with system shutdown or by calling:
+
 ```elixir
 RTSP.close(session)
 ```
@@ -44,8 +45,8 @@ RTSP.close(session)
 
 To implement custom request execution logic you must implement
 `Membrane.Protocol.RTSP.Transport` behaviour. Then you can pass
-name of your transport module to `Membrane.Protocol.RTSP.start/3` as second
- argument.
+the name of your transport module to `Membrane.Protocol.RTSP.start/3` as
+a second argument.
 
 `Membrane.Protocol.RTSP.start/3` assumes that transport module also implements
 GenServer behaviour.
@@ -73,7 +74,7 @@ tests that mimic they behaviour by using predefined responses.
 
 ## Copyright and License
 
-Copyright 2018, [Software Mansion](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane) 
+Copyright 2018, [Software Mansion](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane)
 
 [![Software Mansion](https://membraneframework.github.io/static/logo/swm_logo_readme.png)](https://swmansion.com/?utm_source=git&utm_medium=readme&utm_campaign=membrane)
 

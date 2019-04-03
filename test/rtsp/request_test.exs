@@ -16,7 +16,7 @@ defmodule Membrane.Protocol.RTSP.RequestTest do
 
       %Request{
         method: "DESCRIBE",
-        headers: [{"CSeq", 3}]
+        headers: [{"CSeq", "3"}]
       }
       |> assert_rendered_request(expected_result, uri)
     end
