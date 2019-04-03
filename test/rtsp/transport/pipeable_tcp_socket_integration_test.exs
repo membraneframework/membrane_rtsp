@@ -1,9 +1,9 @@
-defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketIntegrationTest do
+defmodule Membrane.Protocol.RTSP.Transport.TCPSocketIntegrationTest do
   use ExUnit.Case
   use Bunch
 
   alias Membrane.Protocol.RTSP.Transport
-  alias Membrane.Protocol.RTSP.Transport.PipeableTCPSocket
+  alias Membrane.Protocol.RTSP.Transport.TCPSocket
 
   describe "Pipeable TCP Socket" do
     @tag external: true
@@ -11,12 +11,12 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketIntegrationTest do
       {:ok, pid} =
         "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov"
         |> URI.parse()
-        ~> Transport.start_link(Transport.new(PipeableTCPSocket, __MODULE__), &1)
+        ~> Transport.start_link(Transport.new(TCPSocket, __MODULE__), &1)
 
       query =
         "DESCRIBE rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n\r\n"
 
-      assert {:ok, result} = PipeableTCPSocket.execute(query, pid)
+      assert {:ok, result} = TCPSocket.execute(query, pid)
 
       result =~ "RTSP/1.0 200 OK\r\nCSeq: 0\r\nServer: Wowza Streaming Engine 4.7.5.01"
 

@@ -2,7 +2,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   use ExUnit.Case, async: false
   use Bunch
   alias Membrane.Protocol.RTSP
-  alias Membrane.Protocol.RTSP.Transport.{Fake, PipeableTCPSocket}
+  alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
   alias Membrane.Protocol.RTSP.{Request, Response, Session}
   alias Membrane.Protocol.SDP
 
@@ -18,7 +18,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   describe "Session works in combination with" do
     @tag external: true
     test "real transport" do
-      integration_test(@uri, PipeableTCPSocket)
+      integration_test(@uri, TCPSocket)
     end
 
     test "fake transport" do

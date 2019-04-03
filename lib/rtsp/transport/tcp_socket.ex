@@ -1,4 +1,4 @@
-defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
+defmodule Membrane.Protocol.RTSP.Transport.TCPSocket do
   @moduledoc """
   This module implements the Transport behaviour and transmits requests over TCP
   Socket keeping connection until either session is closed or connection is

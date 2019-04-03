@@ -3,7 +3,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
 
   alias Membrane.Protocol.RTSP
   alias Membrane.Protocol.RTSP.Response
-  alias Membrane.Protocol.RTSP.Transport.{Fake, PipeableTCPSocket}
+  alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
 
   describe "RTSP workflow executes" do
     @tag external: true
@@ -11,7 +11,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
     test "over network" do
       workflow(
         "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov",
-        PipeableTCPSocket
+        TCPSocket
       )
     end
 

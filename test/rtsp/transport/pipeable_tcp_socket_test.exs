@@ -1,11 +1,11 @@
-defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
+defmodule Membrane.Protocol.RTSP.Transport.TCPSocketTest do
   use ExUnit.Case
   import Mockery
   import Mockery.Assertions
-  alias Membrane.Protocol.RTSP.Transport.PipeableTCPSocket
+  alias Membrane.Protocol.RTSP.Transport.TCPSocket
 
   setup do
-    state = %PipeableTCPSocket.State{
+    state = %TCPSocket.State{
       connection_info: %URI{
         port: 4000,
         host: "test.com",
@@ -25,9 +25,9 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
         port: 554
       }
 
-      assert PipeableTCPSocket.init(info) ==
+      assert TCPSocket.init(info) ==
                {:ok,
-                %PipeableTCPSocket.State{
+                %TCPSocket.State{
                   connection: nil,
                   connection_info: info,
                   caller: nil
@@ -39,10 +39,10 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
       mock(:gen_tcp, [send: 2], :ok)
 
       assert {:noreply,
-              %Membrane.Protocol.RTSP.Transport.PipeableTCPSocket.State{
+              %Membrane.Protocol.RTSP.Transport.TCPSocket.State{
                 connection: conn,
                 caller: caller
-              }} = PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
+              }} = TCPSocket.handle_call({:execute, "123"}, self(), state)
 
       assert_called(:gen_tcp, :connect)
       assert caller == self()
@@ -50,12 +50,11 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
 
     test "uses already open connection if possible", %{state: state} do
       mock(:gen_tcp, [send: 2], :ok)
-      state = %PipeableTCPSocket.State{state | connection: :stub}
+      state = %TCPSocket.State{state | connection: :stub}
 
-      assert {:noreply, result_state} =
-               PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
+      assert {:noreply, result_state} = TCPSocket.handle_call({:execute, "123"}, self(), state)
 
-      assert %Membrane.Protocol.RTSP.Transport.PipeableTCPSocket.State{
+      assert %Membrane.Protocol.RTSP.Transport.TCPSocket.State{
                connection: conn,
                caller: caller
              } = result_state
@@ -65,16 +64,16 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
     end
 
     test "marks connection as dead when when received tcp_closed message", %{state: state} do
-      assert {:noreply, %PipeableTCPSocket.State{connection: nil}} =
-               PipeableTCPSocket.handle_info({:tcp_closed, :socket}, state)
+      assert {:noreply, %TCPSocket.State{connection: nil}} =
+               TCPSocket.handle_info({:tcp_closed, :socket}, state)
     end
 
     test "replies to most recent sender when received tcp message", %{state: state} do
       sample = "RTSP/1.0 200 OK"
       self_client = {self(), :tag}
       state = %{state | caller: self_client}
-      assert {:noreply, state} = PipeableTCPSocket.handle_info({:tcp, :socket, sample}, state)
-      assert state = %PipeableTCPSocket.State{state | connection: nil}
+      assert {:noreply, state} = TCPSocket.handle_info({:tcp, :socket, sample}, state)
+      assert state = %TCPSocket.State{state | connection: nil}
       assert_received {:tag, {:ok, ^sample}}
     end
 
@@ -82,15 +81,15 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketTest do
       mock(:gen_tcp, [connect: 3], {:error, :etimedout})
 
       assert {:reply, {:error, :etimedout}, _} =
-               PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
+               TCPSocket.handle_call({:execute, "123"}, self(), state)
     end
 
     test "does return an error if message couldn't be sent", %{state: state} do
       mock(:gen_tcp, [send: 2], {:error, :closed})
-      state = %PipeableTCPSocket.State{state | connection: self()}
+      state = %TCPSocket.State{state | connection: self()}
 
       assert {:reply, {:error, :closed}, result_state} =
-               PipeableTCPSocket.handle_call({:execute, "123"}, self(), state)
+               TCPSocket.handle_call({:execute, "123"}, self(), state)
     end
   end
 end
