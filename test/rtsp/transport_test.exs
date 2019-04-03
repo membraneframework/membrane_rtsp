@@ -13,7 +13,8 @@ defmodule Membrane.Protocol.RTSP.TransportTest do
       port: 554
     }
 
-    {:ok, pid} = Transport.start_link(Fake, unique_ref, info)
+    transport = Transport.new(Fake, unique_ref)
+    {:ok, pid} = Transport.start_link(transport, info)
     assert [unique_ref] == Registry.keys(TransportRegistry, pid)
   end
 end

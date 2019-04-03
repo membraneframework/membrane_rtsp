@@ -12,14 +12,13 @@ defmodule Membrane.Protocol.RTSP.Session do
 
   defmodule State do
     @moduledoc false
-    @enforce_keys [:transport, :uri, :transport_executor]
+    @enforce_keys [:transport, :uri]
     defstruct @enforce_keys ++ [:session_id, cseq: 0, execution_options: []]
 
     @type t :: %__MODULE__{
-            transport: module(),
+            transport: Transport.t(),
             cseq: non_neg_integer(),
             uri: URI.t(),
-            transport_executor: binary(),
             session_id: binary() | nil,
             execution_options: Keyword.t()
           }
@@ -29,18 +28,17 @@ defmodule Membrane.Protocol.RTSP.Session do
   Starts and links session process.
 
   Sets following properties of Session:
-    * transport - module that is responsible for executing request
-    * transport_executor - a reference (`Registry` key) that will be used
-    when executing request
+    * transport - struct representing module that will be used when executing
+    request and reference used for resolving process controlling transport
+    process
     * url - a base path for requests
     * options - a keyword list that shall be passed when executing request over transport
   """
-  @spec start_link(module(), binary(), binary(), Keyword.t()) :: GenServer.on_start()
-  def start_link(transport, transport_executor, url, options) do
+  @spec start_link(Transport.t(), binary(), Keyword.t()) :: GenServer.on_start()
+  def start_link(transport, url, options) do
     GenServer.start_link(__MODULE__, %{
       transport: transport,
       url: url,
-      transport_executor: transport_executor,
       options: options
     })
   end
@@ -58,10 +56,9 @@ defmodule Membrane.Protocol.RTSP.Session do
   end
 
   @impl true
-  def init(%{transport: transport, url: url, transport_executor: ref, options: options}) do
+  def init(%{transport: transport, url: url, options: options}) do
     state = %State{
       transport: transport,
-      transport_executor: ref,
       uri: url,
       execution_options: options
     }
@@ -82,15 +79,14 @@ defmodule Membrane.Protocol.RTSP.Session do
   end
 
   defp perform_execution(request, %State{uri: uri, execution_options: options} = state) do
-    %State{cseq: cseq, transport: transport, transport_executor: executor} = state
-    transport_ref = Transport.transport_name(executor)
+    %State{cseq: cseq, transport: transport} = state
 
     request
     |> Request.with_header("CSeq", cseq |> to_string())
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri)
     |> Request.stringify(uri)
-    |> transport.execute(transport_ref, options)
+    |> transport.module.execute(transport.key, options)
   end
 
   defp apply_credentials(request, %URI{userinfo: nil}), do: request

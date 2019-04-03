@@ -15,13 +15,14 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisorTest do
   describe "Couple Supervisor " do
     test "when initializing returns correct spec when valid arguments were provided" do
       ref = "magic_ref"
-      assert {:ok, {_, children_spec}} = CoupleSupervisor.init([Fake, ref, @parsed_uri, []])
+      transport = Transport.new(Fake, ref)
+      assert {:ok, {_, children_spec}} = CoupleSupervisor.init([transport, @parsed_uri, []])
       assert [session_spec, transport_spec] = children_spec
 
-      assert %{id: Session, start: {Session, :start_link, [Fake, ^ref, @parsed_uri, []]}} =
+      assert %{id: Session, start: {Session, :start_link, [^transport, @parsed_uri, []]}} =
                session_spec
 
-      assert %{id: Transport, start: {Transport, :start_link, [Fake, ^ref, @parsed_uri]}} =
+      assert %{id: Transport, start: {Transport, :start_link, [^transport, @parsed_uri]}} =
                transport_spec
     end
 

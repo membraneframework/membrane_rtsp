@@ -7,7 +7,6 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
   they die together as well.
   """
   use Supervisor
-  use Bunch
 
   alias Membrane.Protocol.RTSP.Session
   alias Membrane.Protocol.RTSP.Transport
@@ -20,13 +19,13 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
     case URI.parse(raw_url) do
       %URI{port: port, host: host, scheme: "rtsp"} = url
       when is_number(port) and is_binary(host) ->
-        ref =
+        time =
           :millisecond
           |> :os.system_time()
           |> to_string()
-          ~> (&1 <> raw_url)
 
-        Supervisor.start_link(__MODULE__, [transport, ref, url, options])
+        transport = Transport.new(transport, time <> raw_url)
+        Supervisor.start_link(__MODULE__, [transport, url, options])
 
       _ ->
         {:stop, :invalid_url}
@@ -34,15 +33,15 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
   end
 
   @impl true
-  def init([transport, ref, url, options]) do
+  def init([transport, url, options]) do
     children = [
       %{
         id: Session,
-        start: {Session, :start_link, [transport, ref, url, options]}
+        start: {Session, :start_link, [transport, url, options]}
       },
       %{
         id: Transport,
-        start: {Transport, :start_link, [transport, ref, url]}
+        start: {Transport, :start_link, [transport, url]}
       }
     ]
 

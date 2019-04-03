@@ -60,7 +60,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocket do
 
   @spec open(URI.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
   defp open(%URI{host: host, port: port}) do
-    mockable(:gen_tcp).connect(to_charlist(host), port, binary: {:active, true})
+    mockable(:gen_tcp).connect(to_charlist(host), port, [:binary, active: true])
   end
 
   @spec execute_request(binary(), State.t()) :: {:ok, State.t()} | {:error, atom()}

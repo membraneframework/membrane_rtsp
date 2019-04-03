@@ -11,7 +11,7 @@ defmodule Membrane.Protocol.RTSP.Transport.PipeableTCPSocketIntegrationTest do
       {:ok, pid} =
         "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov"
         |> URI.parse()
-        ~> Transport.start_link(PipeableTCPSocket, __MODULE__, &1)
+        ~> Transport.start_link(Transport.new(PipeableTCPSocket, __MODULE__), &1)
 
       query =
         "DESCRIBE rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0\r\n\r\n"

@@ -3,8 +3,21 @@ defmodule Membrane.Protocol.RTSP.Transport do
   This module represents the Transport contract.
   """
   use Bunch
+  defstruct [:module, :key]
 
   @type transport_ref :: {:via, Registry, {TransportRegistry, binary()}}
+  @type t :: %__MODULE__{
+          module: module(),
+          key: transport_ref
+        }
+
+  @spec new(module(), binary()) :: Membrane.Protocol.RTSP.Transport.t()
+  def new(module, key) do
+    %__MODULE__{
+      module: module,
+      key: {:via, Registry, {TransportRegistry, key}}
+    }
+  end
 
   @doc """
   Invoked by session process when executing requests.
@@ -18,11 +31,8 @@ defmodule Membrane.Protocol.RTSP.Transport do
   The transport process is immediately registered in the TransportRegistry via
   `Registry`.
   """
-  @spec start_link(module(), binary(), URI.t()) :: :ignore | {:error, any()} | {:ok, pid()}
-  def start_link(module, ref, connection_info) do
-    GenServer.start_link(module, connection_info, name: transport_name(ref))
+  @spec start_link(t(), URI.t()) :: :ignore | {:error, any()} | {:ok, pid()}
+  def start_link(transport, connection_info) do
+    GenServer.start_link(transport.module, connection_info, name: transport.key)
   end
-
-  @spec transport_name(binary()) :: transport_ref
-  def transport_name(ref), do: {:via, Registry, {TransportRegistry, ref}}
 end

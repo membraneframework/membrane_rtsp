@@ -10,19 +10,18 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
   import Membrane.Support.MockeryHelper
 
   setup_all do
-    ref = Transport.transport_name("fake_executor")
+    transport = Transport.new(Fake, "fake_executor")
 
     state = %State{
-      transport: Fake,
+      transport: transport,
       cseq: 0,
       uri: "rtsp://domain.net:554/vod/mp4:name.mov" |> URI.parse(),
-      transport_executor: ref,
       session_id: "fake_session"
     }
 
     request = %Request{method: "OPTIONS"}
 
-    [state: state, request: request, ref: ref]
+    [state: state, request: request]
   end
 
   describe "Session when executing a request" do
