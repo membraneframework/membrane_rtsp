@@ -25,9 +25,12 @@ defmodule Membrane.Protocol.RTSP.Response do
   """
   @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | :malformed_header}
   def parse(response) do
-    with {:ok, result} <- response |> parse_start_line(),
-         {:ok, result} <- parse_headers(result) do
-      parse_body(result)
+    [headers, body] = String.split(response, "\r\n\r\n", parts: 2)
+
+    with {:ok, {response, headers}} <- parse_start_line(headers),
+         {:ok, headers} <- parse_headers(headers),
+         {:ok, body} <- parse_body(body, headers) do
+      {:ok, %__MODULE__{response | headers: headers, body: body}}
     end
   end
 
@@ -60,7 +63,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   @spec parse_start_line(raw_response :: binary()) ::
           {:ok, {response :: t(), remainder :: binary}} | {:error, :invalid_start_line}
   defp parse_start_line(binary) do
-    [line, rest] = split_next_chunk(binary)
+    [line, rest] = String.split(binary, "\r\n", parts: 2)
 
     case Regex.run(@start_line_regex, line) do
       [_, version, code] ->
@@ -78,37 +81,26 @@ defmodule Membrane.Protocol.RTSP.Response do
     end
   end
 
-  @spec parse_headers({t, raw_headers :: binary}) ::
-          {:ok, {t, rest :: binary}} | {:error, :malformed_header}
-  defp parse_headers(data, acc \\ [])
-
-  defp parse_headers({response, "\r\n" <> rest}, acc) do
-    headers = Enum.reverse(acc)
-    response = %__MODULE__{response | headers: headers}
-    {:ok, {response, rest}}
+  defp parse_headers(headers) do
+    headers
+    |> String.split("\r\n")
+    |> Bunch.Enum.try_map(fn header ->
+      case String.split(header, ":", parts: 2) do
+        [name, " " <> value] -> {:ok, {name, value}}
+        _ -> {:error, {:malformed_header, header}}
+      end
+    end)
   end
 
-  defp parse_headers({response, binary}, acc) do
-    [line, rest] = split_next_chunk(binary)
-
-    case String.split(line, ":", parts: 2) do
-      [name, " " <> value] -> parse_headers({response, rest}, [{name, value} | acc])
-      _ -> {:error, {:malformed_header, line}}
-    end
-  end
-
-  defp split_next_chunk(response), do: String.split(response, "\r\n", parts: 2)
-
-  @spec parse_body({t(), raw_body :: binary}) :: {:ok, t()} | {:error, atom()}
-  defp parse_body({%__MODULE__{headers: headers} = response, data}) do
+  defp parse_body(data, headers) do
     case List.keyfind(headers, "Content-Type", 0) do
       {"Content-Type", "application/sdp"} ->
         with {:ok, result} <- SDP.parse(data) do
-          {:ok, %__MODULE__{response | body: result}}
+          {:ok, result}
         end
 
       _ ->
-        {:ok, %__MODULE__{response | body: data}}
+        {:ok, data}
     end
   end
 end
