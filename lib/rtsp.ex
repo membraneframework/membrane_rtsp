@@ -35,47 +35,47 @@ defmodule Membrane.Protocol.RTSP do
   end
 
   @spec describe(t(), headers()) :: response()
-  def describe(session, headers \\ []), do: do_request(session, "DESCRIBE", headers, "")
+  def describe(session, headers \\ []), do: request(session, "DESCRIBE", headers, "")
 
   @spec announce(t(), headers(), binary()) :: response()
   def announce(session, headers \\ [], body \\ ""),
-    do: do_request(session, "ANNOUNCE", headers, body)
+    do: request(session, "ANNOUNCE", headers, body)
 
   @spec get_parameter(t(), headers(), binary()) :: response()
   def get_parameter(session, headers \\ [], body \\ ""),
-    do: do_request(session, "GET_PARAMETER", headers, body)
+    do: request(session, "GET_PARAMETER", headers, body)
 
   @spec options(t(), headers()) :: response()
-  def options(session, headers \\ []), do: do_request(session, "OPTIONS", headers)
+  def options(session, headers \\ []), do: request(session, "OPTIONS", headers)
 
   @spec pause(t(), headers()) :: response()
-  def pause(session, headers \\ []), do: do_request(session, "PAUSE", headers)
+  def pause(session, headers \\ []), do: request(session, "PAUSE", headers)
 
   @spec play(t(), headers()) :: response()
   def play(session, headers \\ []) do
-    do_request(session, "PLAY", headers, "")
+    request(session, "PLAY", headers, "")
   end
 
   @spec record(t(), headers()) :: response()
-  def record(session, headers \\ []), do: do_request(session, "RECORD", headers)
+  def record(session, headers \\ []), do: request(session, "RECORD", headers)
 
   @spec setup(t(), binary(), headers()) :: response()
   def setup(session, path, headers \\ []) do
-    do_request(session, "SETUP", headers, "", path)
+    request(session, "SETUP", headers, "", path)
   end
 
   @spec set_parameter(t(), headers(), binary()) :: response()
   def set_parameter(session, headers \\ [], body \\ ""),
-    do: do_request(session, "SET_PARAMETER", headers, body)
+    do: request(session, "SET_PARAMETER", headers, body)
 
   @spec teardown(t(), headers()) :: response
-  def teardown(session, headers \\ []), do: do_request(session, "TEARDOWN", headers)
+  def teardown(session, headers \\ []), do: request(session, "TEARDOWN", headers)
 
-  @spec do_request(t(), binary(), headers(), binary(), nil | binary()) :: response
-  def do_request(session, method, headers \\ [], body \\ "", path \\ nil) do
+  @spec request(t(), binary(), headers(), binary(), nil | binary()) :: response
+  def request(session, method, headers \\ [], body \\ "", path \\ nil) do
     %__MODULE__{session: session_pid} = session
 
     request = %Request{method: method, headers: headers, body: body, path: path}
-    Session.execute(session_pid, request)
+    Session.request(session_pid, request)
   end
 end

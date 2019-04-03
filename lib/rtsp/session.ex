@@ -50,8 +50,8 @@ defmodule Membrane.Protocol.RTSP.Session do
   and `User-Agent` header. If the URI contains credentials they will also
   be added unless `Authorization` header is present in request.
   """
-  @spec execute(pid(), Request.t(), non_neg_integer()) :: {:ok, Response.t()} | {:error, atom()}
-  def execute(session, request, timeout \\ 5000) do
+  @spec request(pid(), Request.t(), non_neg_integer()) :: {:ok, Response.t()} | {:error, atom()}
+  def request(session, request, timeout \\ 5000) do
     GenServer.call(session, {:execute, request}, timeout)
   end
 
@@ -68,7 +68,7 @@ defmodule Membrane.Protocol.RTSP.Session do
 
   @impl true
   def handle_call({:execute, request}, _from, %State{cseq: cseq} = state) do
-    with {:ok, raw_response} <- perform_execution(request, state),
+    with {:ok, raw_response} <- execute(request, state),
          {:ok, parsed_response} <- Response.parse(raw_response),
          {:ok, state} <- handle_session_id(parsed_response, state) do
       state = %State{state | cseq: cseq + 1}
@@ -78,7 +78,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     end
   end
 
-  defp perform_execution(request, %State{uri: uri, execution_options: options} = state) do
+  defp execute(request, %State{uri: uri, execution_options: options} = state) do
     %State{cseq: cseq, transport: transport} = state
 
     request

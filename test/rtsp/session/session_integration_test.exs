@@ -35,7 +35,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
       body: ""
     }
 
-    assert {:ok, response} = Session.execute(pid, request)
+    assert {:ok, response} = Session.request(pid, request)
 
     assert %Response{
              body: body,
