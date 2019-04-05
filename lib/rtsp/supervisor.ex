@@ -12,7 +12,7 @@ defmodule Membrane.Protocol.RTSP.Supervisor do
   def start_child(module, url, options \\ []) do
     spec = %{
       id: Session,
-      start: {Session, :start_link, [module, url, options]}
+      start: {Session, :start_container, [module, url, options]}
     }
 
     DynamicSupervisor.start_child(__MODULE__, spec)

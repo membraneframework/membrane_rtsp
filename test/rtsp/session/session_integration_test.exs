@@ -3,7 +3,8 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   use Bunch
   alias Membrane.Protocol.RTSP
   alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
-  alias Membrane.Protocol.RTSP.{Request, Response, Session.Manager}
+  alias Membrane.Protocol.RTSP.{Request, Response, Session}
+  alias Membrane.Protocol.RTSP.Session.Manager
   alias Membrane.Protocol.SDP
 
   @expected_query """
@@ -27,7 +28,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   end
 
   def integration_test(uri, transport, options \\ []) do
-    assert {:ok, %RTSP{session: pid} = rtsp} = RTSP.start(uri, transport, options)
+    assert {:ok, %Session{manager: pid} = rtsp} = Session.start(uri, transport, options)
 
     request = %Request{
       method: "DESCRIBE",
@@ -58,7 +59,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
            ] = headers
 
     assert %SDP.Session{} = body
-    assert :ok == RTSP.close(rtsp)
+    assert :ok == Session.close(rtsp)
   end
 
   def resolver(@expected_query) do

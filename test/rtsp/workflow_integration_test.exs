@@ -2,7 +2,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
   use ExUnit.Case
 
   alias Membrane.Protocol.RTSP
-  alias Membrane.Protocol.RTSP.Response
+  alias Membrane.Protocol.RTSP.{Response, Session}
   alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
 
   describe "RTSP workflow executes" do
@@ -21,7 +21,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
   end
 
   defp workflow(url, transport, options \\ []) do
-    assert {:ok, session} = RTSP.start(url, transport, options)
+    assert {:ok, session} = Session.start(url, transport, options)
     assert {:ok, %Response{status: 200}} = RTSP.describe(session)
 
     assert {:ok, %Response{status: 200}} =
@@ -36,7 +36,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
 
     assert {:ok, %Response{status: 200}} = RTSP.play(session)
     assert {:ok, %Response{status: 200}} = RTSP.teardown(session)
-    assert :ok == RTSP.close(session)
+    assert :ok == Session.close(session)
   end
 
   def resolver(request) do

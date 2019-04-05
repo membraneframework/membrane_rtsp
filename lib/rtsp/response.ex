@@ -13,9 +13,11 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   @type t :: %__MODULE__{
           status: non_neg_integer(),
-          headers: [{binary(), binary()}],
+          headers: Membrane.Protocol.RTSP.headers(),
           body: any()
         }
+
+  @type on_result :: {:ok, t()} | {:error, atom()}
 
   @doc """
   Parses RTSP response.
