@@ -16,8 +16,8 @@ defmodule Membrane.Protocol.RTSP.Session.Supervisor do
     DynamicSupervisor.start_child(__MODULE__, spec)
   end
 
-  @spec terminate_child(any()) :: :ok | {:error, :not_found | :simple_one_for_one}
-  def terminate_child(pid), do: Supervisor.terminate_child(__MODULE__, pid)
+  @spec terminate_child(any()) :: :ok | {:error, :not_found}
+  def terminate_child(pid), do: DynamicSupervisor.terminate_child(__MODULE__, pid)
 
   @impl true
   def init(_) do

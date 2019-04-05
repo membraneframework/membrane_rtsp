@@ -19,12 +19,7 @@ defmodule Membrane.Protocol.RTSP.Session.CoupleSupervisor do
     case URI.parse(raw_url) do
       %URI{port: port, host: host, scheme: "rtsp"} = url
       when is_number(port) and is_binary(host) ->
-        time =
-          :millisecond
-          |> :os.system_time()
-          |> to_string()
-
-        transport = Transport.new(transport, time <> raw_url)
+        transport = Transport.new(transport, make_ref())
         Supervisor.start_link(__MODULE__, [transport, url, options])
 
       _ ->
