@@ -1,4 +1,4 @@
-defmodule Membrane.Protocol.RTSP.Session do
+defmodule Membrane.Protocol.RTSP.SessionManager do
   @moduledoc """
   This module is responsible for managing RTSP Session.
 

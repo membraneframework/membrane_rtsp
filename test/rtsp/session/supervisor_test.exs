@@ -1,7 +1,7 @@
 defmodule Membrane.Protocol.RTSP.Session.SupervisorTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP.{Session, Transport}
+  alias Membrane.Protocol.RTSP.{SessionManager, Transport, Session}
 
   @parsed_uri %URI{
     authority: "domain.com:554",
@@ -18,15 +18,17 @@ defmodule Membrane.Protocol.RTSP.Session.SupervisorTest do
       assert {:ok, {_, children_spec}} = Session.Supervisor.init([transport, @parsed_uri, []])
       assert [session_spec, transport_spec] = children_spec
 
-      assert %{id: Session, start: {Session, :start_link, [^transport, @parsed_uri, []]}} =
-               session_spec
+      assert %{
+               id: SessionManager,
+               start: {SessionManager, :start_link, [^transport, @parsed_uri, []]}
+             } = session_spec
 
       assert %{id: Transport, start: {Transport, :start_link, [^transport, @parsed_uri]}} =
                transport_spec
     end
 
     test "start_link returns an error if invalid uri is provided" do
-      assert {:stop, :invalid_url} ==
+      assert {:error, :invalid_url} ==
                Session.Supervisor.start_link(Fake, "rtsp://vod/mp4:movie.mov", [])
     end
   end

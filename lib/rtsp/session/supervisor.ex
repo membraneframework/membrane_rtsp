@@ -6,7 +6,7 @@ defmodule Membrane.Protocol.RTSP.Session.Supervisor do
   """
   use Supervisor
 
-  alias Membrane.Protocol.RTSP.{Session, Transport}
+  alias Membrane.Protocol.RTSP.{SessionManager, Transport}
 
   @doc """
   Starts and links process that supervises Session and companion Transport process.
@@ -29,8 +29,8 @@ defmodule Membrane.Protocol.RTSP.Session.Supervisor do
   def init([transport, url, options]) do
     children = [
       %{
-        id: Session,
-        start: {Session, :start_link, [transport, url, options]}
+        id: SessionManager,
+        start: {SessionManager, :start_link, [transport, url, options]}
       },
       %{
         id: Transport,
