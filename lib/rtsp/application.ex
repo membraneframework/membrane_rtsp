@@ -2,7 +2,7 @@ defmodule Membrane.Protocol.RTSP.Application do
   @moduledoc false
   use Application
 
-  alias Membrane.Protocol.RTSP.Session
+  alias Membrane.Protocol.RTSP
 
   def start(_type, _args) do
     children = [
@@ -11,8 +11,8 @@ defmodule Membrane.Protocol.RTSP.Application do
         start: {Registry, :start_link, [:unique, TransportRegistry]}
       },
       %{
-        id: Session.Supervisor,
-        start: {Session.Supervisor, :start_link, []}
+        id: RTSP.Supervisor,
+        start: {RTSP.Supervisor, :start_link, []}
       }
     ]
 

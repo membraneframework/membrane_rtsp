@@ -3,6 +3,7 @@ defmodule Membrane.Protocol.RTSP do
   This module provides a functionality to open a session, execute a RTSP requests
   through that session and close the session.
   """
+  alias __MODULE__.Supervisor, as: RTSPSupervisor
   alias Membrane.Protocol.RTSP.{Request, Response, Session}
   alias Membrane.Protocol.RTSP.Transport.TCPSocket
 
@@ -19,7 +20,7 @@ defmodule Membrane.Protocol.RTSP do
 
   @spec start(binary(), module(), Keyword.t()) :: :ignore | {:error, atom()} | {:ok, t()}
   def start(url, transport \\ TCPSocket, options \\ []) do
-    with {:ok, supervisor} <- Session.Supervisor.start_child(transport, url, options) do
+    with {:ok, supervisor} <- RTSPSupervisor.start_child(transport, url, options) do
       {Session, session_pid, _, _} =
         supervisor
         |> Supervisor.which_children()
@@ -31,7 +32,7 @@ defmodule Membrane.Protocol.RTSP do
 
   @spec close(t()) :: :ok | {:error, atom()}
   def close(%__MODULE__{container: container}) do
-    Session.Supervisor.terminate_child(container)
+    RTSPSupervisor.terminate_child(container)
   end
 
   @spec describe(t(), headers()) :: response()

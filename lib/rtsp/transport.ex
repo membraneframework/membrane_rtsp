@@ -1,6 +1,9 @@
 defmodule Membrane.Protocol.RTSP.Transport do
   @moduledoc """
   This module represents the Transport contract.
+
+  Struct contains module that will be used when executing request and reference
+  used for resolving transport process.
   """
   use Bunch
   defstruct [:module, :key]
@@ -11,7 +14,7 @@ defmodule Membrane.Protocol.RTSP.Transport do
           key: transport_ref
         }
 
-  @spec new(module(), binary()) :: Membrane.Protocol.RTSP.Transport.t()
+  @spec new(module(), reference) :: Membrane.Protocol.RTSP.Transport.t()
   def new(module, key) do
     %__MODULE__{
       module: module,

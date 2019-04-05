@@ -1,26 +1,43 @@
 defmodule Membrane.Protocol.RTSP.Session.Supervisor do
-  @moduledoc false
-  use DynamicSupervisor
-  alias Membrane.Protocol.RTSP.Session.CoupleSupervisor
+  @moduledoc """
+  This module serves as a container for spawning Session and Transport combination.
 
-  @spec start_link() :: Supervisor.on_start()
-  def start_link, do: DynamicSupervisor.start_link(__MODULE__, nil, name: __MODULE__)
+  # TODO write some detailed documentation
+  """
+  use Supervisor
 
-  @spec start_child(module(), binary(), Keyword.t()) :: DynamicSupervisor.on_start_child()
-  def start_child(module, url, options \\ []) do
-    spec = %{
-      id: CoupleSupervisor,
-      start: {CoupleSupervisor, :start_link, [module, url, options]}
-    }
+  alias Membrane.Protocol.RTSP.{Session, Transport}
 
-    DynamicSupervisor.start_child(__MODULE__, spec)
+  @doc """
+  Starts and links process that supervises Session and companion Transport process.
+  """
+  @spec start_link(module(), binary(), Keyword.t()) ::
+          Supervisor.on_start() | {:error, :invalid_url}
+  def start_link(transport, raw_url, options) do
+    case URI.parse(raw_url) do
+      %URI{port: port, host: host, scheme: "rtsp"} = url
+      when is_number(port) and is_binary(host) ->
+        transport = Transport.new(transport, make_ref())
+        Supervisor.start_link(__MODULE__, [transport, url, options])
+
+      _ ->
+        {:error, :invalid_url}
+    end
   end
 
-  @spec terminate_child(any()) :: :ok | {:error, :not_found}
-  def terminate_child(pid), do: DynamicSupervisor.terminate_child(__MODULE__, pid)
-
   @impl true
-  def init(_) do
-    DynamicSupervisor.init(strategy: :one_for_one)
+  def init([transport, url, options]) do
+    children = [
+      %{
+        id: Session,
+        start: {Session, :start_link, [transport, url, options]}
+      },
+      %{
+        id: Transport,
+        start: {Transport, :start_link, [transport, url]}
+      }
+    ]
+
+    Supervisor.init(children, strategy: :one_for_one)
   end
 end
