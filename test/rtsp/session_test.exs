@@ -7,7 +7,7 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
   alias Membrane.Protocol.RTSP.Transport.Fake
 
   import Mockery
-  import Membrane.Support.MockeryHelper
+  import Mockery.Assertions
 
   setup_all do
     transport = Transport.new(Fake, "fake_executor")
@@ -30,14 +30,13 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
          resolved successfully\
          """,
          %{state: state, request: request} do
-      mock(Fake, :proxy, nil)
+      mock(Fake, [proxy: 2], fn serialized_request, _ ->
+        assert String.contains?(serialized_request, "\r\nUser-Agent")
+      end)
 
       assert {:reply, {:ok, _}, next_state} = Session.handle_call({:execute, request}, nil, state)
       assert next_state == %State{state | cseq: state.cseq + 1}
-
-      assert_called(Fake, :proxy, fn [serialized_request | _] ->
-        String.contains?(serialized_request, "\r\nUser-Agent")
-      end)
+      assert_called(Fake, proxy: 2)
     end
 
     test "returns an error if response has different session", %{
@@ -55,13 +54,14 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
       session_id = "arbitrary_string"
       request = request |> Request.with_header("Session", session_id)
 
+      mock(Fake, [proxy: 2], fn serialized_request, _ ->
+        assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
+      end)
+
       assert {:reply, {:ok, _}, state} = Session.handle_call({:execute, request}, nil, state)
       assert state.session_id == session_id
       assert {:reply, {:ok, _}, _} = Session.handle_call({:execute, request}, nil, state)
-
-      assert_called(Fake, :proxy, fn [serialized_request | _] ->
-        String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
-      end)
+      assert_called(Fake, proxy: 2)
     end
 
     test "applies credentials to request if they were provided in the uri", %{
@@ -71,17 +71,18 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
       credentials = "login:password"
       encoded_credentials = credentials |> Base.encode64()
 
+      mock(Fake, [proxy: 2], fn serialized_request, _ref ->
+        assert String.contains?(
+                 serialized_request,
+                 "\r\nAuthorization: Basic #{encoded_credentials}\r\n"
+               )
+      end)
+
       parsed_uri = URI.parse("rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov")
       state = %State{state | uri: parsed_uri}
 
       assert {:reply, {:ok, _}, state} = Session.handle_call({:execute, request}, nil, state)
-
-      assert_called(Fake, :proxy, fn [serialized_request | _] ->
-        String.contains?(
-          serialized_request,
-          "\r\nAuthorization: Basic #{encoded_credentials}\r\n"
-        )
-      end)
+      assert_called(Fake, proxy: 2)
     end
   end
 end
