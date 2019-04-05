@@ -1,12 +1,14 @@
-defmodule Membrane.Protocol.RTSP.Session.Supervisor do
-  @moduledoc """
-  This module serves as a container for spawning Session and Transport combination.
-
-  # TODO write some detailed documentation
-  """
+defmodule Membrane.Protocol.RTSP.Session do
   use Supervisor
 
-  alias Membrane.Protocol.RTSP.{SessionManager, Transport}
+  alias Membrane.Protocol.RTSP.{Session.Manager, Transport}
+
+  defstruct [:manager, :supervisor]
+
+  @type t :: %__MODULE__{
+          manager: pid(),
+          supervisor: pid()
+        }
 
   @doc """
   Starts and links process that supervises Session and companion Transport process.
@@ -29,8 +31,8 @@ defmodule Membrane.Protocol.RTSP.Session.Supervisor do
   def init([transport, url, options]) do
     children = [
       %{
-        id: SessionManager,
-        start: {SessionManager, :start_link, [transport, url, options]}
+        id: Manager,
+        start: {Manager, :start_link, [transport, url, options]}
       },
       %{
         id: Transport,

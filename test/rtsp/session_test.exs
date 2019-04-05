@@ -2,8 +2,8 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
   use ExUnit.Case
   use Bunch
 
-  alias Membrane.Protocol.RTSP.{Request, SessionManager, Transport}
-  alias Membrane.Protocol.RTSP.SessionManager.State
+  alias Membrane.Protocol.RTSP.{Request, Session.Manager, Transport}
+  alias Membrane.Protocol.RTSP.Session.Manager.State
   alias Membrane.Protocol.RTSP.Transport.Fake
 
   import Mockery
@@ -34,8 +34,7 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
         assert String.contains?(serialized_request, "\r\nUser-Agent")
       end)
 
-      assert {:reply, {:ok, _}, next_state} =
-               SessionManager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, next_state} = Manager.handle_call({:execute, request}, nil, state)
 
       assert next_state == %State{state | cseq: state.cseq + 1}
       assert_called(Fake, proxy: 2)
@@ -48,7 +47,7 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
       state = %State{state | execution_options: [resolver: resolver]}
 
       {:reply, {:error, :timeout}, ^state} =
-        SessionManager.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
+        Manager.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
     end
 
     test "preserves session_id", %{request: request, state: state} do
@@ -60,11 +59,10 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
         assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
       end)
 
-      assert {:reply, {:ok, _}, state} =
-               SessionManager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
 
       assert state.session_id == session_id
-      assert {:reply, {:ok, _}, _} = SessionManager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, _} = Manager.handle_call({:execute, request}, nil, state)
       assert_called(Fake, proxy: 2)
     end
 
@@ -85,8 +83,7 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
       parsed_uri = URI.parse("rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov")
       state = %State{state | uri: parsed_uri}
 
-      assert {:reply, {:ok, _}, state} =
-               SessionManager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
 
       assert_called(Fake, proxy: 2)
     end

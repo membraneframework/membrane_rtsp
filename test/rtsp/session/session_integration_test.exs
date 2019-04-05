@@ -3,7 +3,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   use Bunch
   alias Membrane.Protocol.RTSP
   alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
-  alias Membrane.Protocol.RTSP.{Request, Response, SessionManager}
+  alias Membrane.Protocol.RTSP.{Request, Response, Session.Manager}
   alias Membrane.Protocol.SDP
 
   @expected_query """
@@ -35,7 +35,7 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
       body: ""
     }
 
-    assert {:ok, response} = SessionManager.request(pid, request)
+    assert {:ok, response} = Manager.request(pid, request)
 
     assert %Response{
              body: body,

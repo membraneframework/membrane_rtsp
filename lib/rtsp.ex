@@ -4,7 +4,7 @@ defmodule Membrane.Protocol.RTSP do
   through that session and close the session.
   """
   alias __MODULE__.Supervisor, as: RTSPSupervisor
-  alias Membrane.Protocol.RTSP.{Request, Response, SessionManager}
+  alias Membrane.Protocol.RTSP.{Request, Response, Session.Manager}
   alias Membrane.Protocol.RTSP.Transport.TCPSocket
 
   @enforce_keys [:session, :container]
@@ -21,10 +21,10 @@ defmodule Membrane.Protocol.RTSP do
   @spec start(binary(), module(), Keyword.t()) :: :ignore | {:error, atom()} | {:ok, t()}
   def start(url, transport \\ TCPSocket, options \\ []) do
     with {:ok, supervisor} <- RTSPSupervisor.start_child(transport, url, options) do
-      {SessionManager, session_pid, _, _} =
+      {Manager, session_pid, _, _} =
         supervisor
         |> Supervisor.which_children()
-        |> List.keyfind(SessionManager, 0)
+        |> List.keyfind(Manager, 0)
 
       {:ok, %__MODULE__{session: session_pid, container: supervisor}}
     end
@@ -77,6 +77,6 @@ defmodule Membrane.Protocol.RTSP do
     %__MODULE__{session: session_pid} = session
 
     request = %Request{method: method, headers: headers, body: body, path: path}
-    SessionManager.request(session_pid, request)
+    Manager.request(session_pid, request)
   end
 end
