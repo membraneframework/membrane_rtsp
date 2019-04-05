@@ -4,6 +4,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   """
 
   @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/
+  @line_delimiter ["\r\n", "\r", "\n"]
 
   @enforce_keys [:status, :version]
   defstruct @enforce_keys ++ [headers: [], body: ""]
@@ -19,13 +20,12 @@ defmodule Membrane.Protocol.RTSP.Response do
   @doc """
   Parses RTSP response.
 
-  Requires a raw response to be `\\r\\n` delimited. If the body is present
-  it will be parsed according to `Content-Type` header. Currently
-  only the `application/sdp` is supported.
+  If the body is present it will be parsed according to `Content-Type` header.
+  Currently only the `application/sdp` is supported.
   """
   @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | :malformed_header}
   def parse(response) do
-    [headers, body] = String.split(response, "\r\n\r\n", parts: 2)
+    [headers, body] = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
 
     with {:ok, {response, headers}} <- parse_start_line(headers),
          {:ok, headers} <- parse_headers(headers),
@@ -63,7 +63,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   @spec parse_start_line(raw_response :: binary()) ::
           {:ok, {response :: t(), remainder :: binary}} | {:error, :invalid_start_line}
   defp parse_start_line(binary) do
-    [line, rest] = String.split(binary, "\r\n", parts: 2)
+    [line, rest] = String.split(binary, @line_delimiter, parts: 2)
 
     case Regex.run(@start_line_regex, line) do
       [_, version, code] ->
@@ -83,7 +83,7 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   defp parse_headers(headers) do
     headers
-    |> String.split("\r\n")
+    |> String.split(@line_delimiter)
     |> Bunch.Enum.try_map(fn header ->
       case String.split(header, ":", parts: 2) do
         [name, " " <> value] -> {:ok, {name, value}}

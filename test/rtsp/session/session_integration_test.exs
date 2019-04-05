@@ -76,7 +76,8 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
       Session: 443551157;timeout=60
 
       v=0
-      o=- 443551157 443551157 IN IP4 184.72.239.149\r\ns=BigBuckBunny_115k.mov
+      o=- 443551157 443551157 IN IP4 184.72.239.149
+      s=BigBuckBunny_115k.mov
       c=IN IP4 184.72.239.149
       t=0 0
       a=sdplang:en

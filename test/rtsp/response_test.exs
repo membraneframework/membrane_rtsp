@@ -46,4 +46,36 @@ defmodule Membrane.Protocol.RTSP.ResponseTest do
       assert headers == [{"CSeq", "0"}, {"Date", "Thu, 07 Mar 2019 05:36:09 GMT"}]
     end
   end
+
+  describe "Supports endline symbol" do
+    test "CRLF" do
+      assert_example_parsed(&String.replace(&1, "\n", "\r\n"))
+    end
+
+    test "CR" do
+      assert_example_parsed(&String.replace(&1, "\n", "\r"))
+    end
+
+    test "LF" do
+      assert_example_parsed(& &1)
+    end
+
+    def assert_example_parsed(transformer) do
+      newline_spec = """
+      RTSP/1.0 200 OK
+      CSeq: 3
+      Content-Type: application/text
+
+      v=0
+      """
+
+      assert {:ok, %Response{body: body, headers: headers}} =
+               newline_spec
+               |> transformer.()
+               |> Response.parse()
+
+      assert headers == [{"CSeq", "3"}, {"Content-Type", "application/text"}]
+      assert body = "v=0"
+    end
+  end
 end
