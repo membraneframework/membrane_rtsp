@@ -5,12 +5,10 @@ defmodule Membrane.Protocol.RTSP.Request do
   @enforce_keys [:method]
   defstruct @enforce_keys ++ [:path, headers: [], body: ""]
 
-  alias Membrane.Protocol.RTSP
-
   @type t :: %__MODULE__{
           method: binary(),
           body: binary(),
-          headers: RTSP.headers(),
+          headers: Membrane.Protocol.RTSP.headers(),
           path: nil | binary()
         }
 

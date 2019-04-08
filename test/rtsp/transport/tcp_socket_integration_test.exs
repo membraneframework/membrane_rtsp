@@ -5,7 +5,7 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocketIntegrationTest do
   alias Membrane.Protocol.RTSP.Transport
   alias Membrane.Protocol.RTSP.Transport.TCPSocket
 
-  describe "Pipeable TCP Socket" do
+  describe "TCP Socket" do
     @tag external: true
     test "executes request successfully" do
       {:ok, pid} =

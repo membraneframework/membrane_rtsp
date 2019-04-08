@@ -1,10 +1,10 @@
 defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   use ExUnit.Case, async: false
   use Bunch
-  alias Membrane.Protocol.RTSP
-  alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
+
   alias Membrane.Protocol.RTSP.{Request, Response, Session}
   alias Membrane.Protocol.RTSP.Session.Manager
+  alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
   alias Membrane.Protocol.SDP
 
   @expected_query """

@@ -4,7 +4,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   """
 
   @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/
-  @line_delimiter ["\r\n", "\r", "\n"]
+  @line_ending ["\r\n", "\r", "\n"]
 
   @enforce_keys [:status, :version]
   defstruct @enforce_keys ++ [headers: [], body: ""]
@@ -65,7 +65,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   @spec parse_start_line(raw_response :: binary()) ::
           {:ok, {response :: t(), remainder :: binary}} | {:error, :invalid_start_line}
   defp parse_start_line(binary) do
-    [line, rest] = String.split(binary, @line_delimiter, parts: 2)
+    [line, rest] = String.split(binary, @line_ending, parts: 2)
 
     case Regex.run(@start_line_regex, line) do
       [_, version, code] ->
@@ -85,7 +85,7 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   defp parse_headers(headers) do
     headers
-    |> String.split(@line_delimiter)
+    |> String.split(@line_ending)
     |> Bunch.Enum.try_map(fn header ->
       case String.split(header, ":", parts: 2) do
         [name, " " <> value] -> {:ok, {name, value}}

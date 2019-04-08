@@ -1,7 +1,6 @@
 defmodule Membrane.Protocol.RTSP.Session do
   @moduledoc """
   This module serves as a container for Session and Transport process combination.
-
   """
   use Supervisor
 
@@ -17,6 +16,9 @@ defmodule Membrane.Protocol.RTSP.Session do
           supervisor: pid()
         }
 
+  @doc """
+  Starts Supervised Session.
+  """
   @spec start(binary(), module(), Keyword.t()) :: :ignore | {:error, atom()} | {:ok, t()}
   def start(url, transport \\ TCPSocket, options \\ []) do
     with {:ok, supervisor} <- RTSPSupervisor.start_child(transport, url, options) do

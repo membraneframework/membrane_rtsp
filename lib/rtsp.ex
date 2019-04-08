@@ -3,8 +3,7 @@ defmodule Membrane.Protocol.RTSP do
   This module provides a functionality to open a session, execute a RTSP requests
   through that session and close the session.
   """
-  alias __MODULE__.Supervisor, as: RTSPSupervisor
-  alias Membrane.Protocol.RTSP.{Request, Response, Session}
+  alias Membrane.Protocol.RTSP.{Response, Session}
 
   @type headers :: [{binary(), binary()}]
 
