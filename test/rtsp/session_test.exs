@@ -31,5 +31,9 @@ defmodule Membrane.Protocol.RTSP.SessionTest do
       assert {:error, :invalid_url} ==
                Session.start_container(Fake, "rtsp://vod/mp4:movie.mov", [])
     end
+
+    test "start fails if uri is not valid" do
+      assert {:error, :invalid_url} = Session.start("invalid uri")
+    end
   end
 end

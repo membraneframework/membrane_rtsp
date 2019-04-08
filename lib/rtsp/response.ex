@@ -17,7 +17,7 @@ defmodule Membrane.Protocol.RTSP.Response do
           body: any()
         }
 
-  @type on_result :: {:ok, t()} | {:error, atom()}
+  @type result :: {:ok, t()} | {:error, atom()}
 
   @doc """
   Parses RTSP response.

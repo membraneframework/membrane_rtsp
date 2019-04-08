@@ -87,5 +87,23 @@ defmodule Membrane.Protocol.RTSP.SessionManagerTest do
 
       assert_called(Fake, proxy: 2)
     end
+
+    test "does not apply credentials to request if they were already present", %{state: state} do
+      request = %Request{method: "OPTIONS", headers: [{"Authorization", "Basic data"}]}
+
+      mock(Fake, [proxy: 2], fn serialized_request, _ref ->
+        assert String.contains?(
+                 serialized_request,
+                 "\r\nAuthorization: Basic data\r\n"
+               )
+      end)
+
+      parsed_uri = URI.parse("rtsp://login:password@domain.net:554/vod/mp4:name.mov")
+      state = %State{state | uri: parsed_uri}
+
+      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+
+      assert_called(Fake, proxy: 2)
+    end
   end
 end

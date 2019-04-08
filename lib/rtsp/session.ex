@@ -36,7 +36,7 @@ defmodule Membrane.Protocol.RTSP.Session do
     RTSPSupervisor.terminate_child(supervisor)
   end
 
-  @spec request(t(), binary(), RTSP.headers(), binary(), nil | binary()) :: Response.on_result()
+  @spec request(t(), binary(), RTSP.headers(), binary(), nil | binary()) :: Response.result()
   def request(session, method, headers \\ [], body \\ "", path \\ nil) do
     %__MODULE__{manager: manager} = session
 
@@ -45,7 +45,7 @@ defmodule Membrane.Protocol.RTSP.Session do
   end
 
   @doc """
-  Starts and links process that supervises Session and companion Transport process.
+  Starts and links process that Session Manager and companion Transport process.
   """
   @spec start_container(module(), binary(), Keyword.t()) ::
           Supervisor.on_start() | {:error, :invalid_url}
