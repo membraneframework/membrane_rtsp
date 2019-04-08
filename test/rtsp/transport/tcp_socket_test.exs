@@ -11,7 +11,8 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocketTest do
         host: "test.com",
         path: "/"
       },
-      caller: nil
+      caller: nil,
+      connection_timeout: 500
     }
 
     [state: state]
@@ -19,23 +20,29 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocketTest do
 
   describe "Pipeable TCP Socket does" do
     test "consume connection info and produces state" do
-      info = %URI{
+      mock(:gen_tcp, [connect: 4], fn _, _, _, _ -> {:ok, :super_port} end)
+
+      uri = %URI{
         host: "wowzaec2demo.streamlock.net",
         path: "/vod/mp4:BigBuckBunny_115k.mov",
         port: 554
       }
 
-      assert TCPSocket.init(info) ==
-               {:ok,
-                %TCPSocket.State{
-                  connection: nil,
-                  connection_info: info,
-                  caller: nil
-                }}
+      info = %{
+        uri: uri,
+        options: []
+      }
+
+      assert {:ok,
+              %TCPSocket.State{
+                connection: :super_port,
+                connection_info: ^uri,
+                caller: nil
+              }} = TCPSocket.init(info)
     end
 
     test "open new connection if one present in state is dead", %{state: state} do
-      mock(:gen_tcp, [connect: 3], fn _, _, _ -> {:ok, :super_port} end)
+      mock(:gen_tcp, [connect: 4], fn _, _, _, _ -> {:ok, :super_port} end)
       mock(:gen_tcp, [send: 2], :ok)
 
       assert {:noreply,
@@ -78,7 +85,7 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocketTest do
     end
 
     test "does return an error if connection can't be made", %{state: state} do
-      mock(:gen_tcp, [connect: 3], {:error, :etimedout})
+      mock(:gen_tcp, [connect: 4], {:error, :etimedout})
 
       assert {:reply, {:error, :etimedout}, _} =
                TCPSocket.handle_call({:execute, "123"}, self(), state)

@@ -13,16 +13,18 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocket do
 
   @behaviour Membrane.Protocol.RTSP.Transport
   @default_timeout 5000
+  @connection_timeout 1000
 
   defmodule State do
     @moduledoc false
-    @enforce_keys [:connection_info]
+    @enforce_keys [:connection_info, :connection_timeout]
     defstruct @enforce_keys ++ [:connection, :caller]
 
     @type t :: %__MODULE__{
             connection_info: URI.t(),
             connection: :gen_tcp.socket() | nil,
-            caller: pid() | nil
+            caller: pid() | nil,
+            connection_timeout: non_neg_integer()
           }
   end
 
@@ -33,8 +35,20 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocket do
   end
 
   @impl true
-  def init(%URI{} = connection_info) do
-    {:ok, %State{connection_info: connection_info}}
+  def init(%{uri: %URI{} = connection_info, options: options}) do
+    connection_timeout = Keyword.get(options, :connection_timeout, @connection_timeout)
+
+    with {:ok, socket} <- open(connection_info, connection_timeout) do
+      state = %State{
+        connection_info: connection_info,
+        connection: socket,
+        connection_timeout: connection_timeout
+      }
+
+      {:ok, state}
+    else
+      {:error, reason} -> {:stop, reason}
+    end
   end
 
   @impl true
@@ -58,14 +72,18 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocket do
     {:noreply, %State{state | connection: nil}}
   end
 
-  @spec open(URI.t()) :: {:error, atom()} | {:ok, :gen_tcp.socket()}
-  defp open(%URI{host: host, port: port}) do
-    mockable(:gen_tcp).connect(to_charlist(host), port, [:binary, active: true])
+  defp open(%URI{host: host, port: port}, connection_timeout) do
+    mockable(:gen_tcp).connect(
+      to_charlist(host),
+      port,
+      [:binary, active: true],
+      connection_timeout
+    )
   end
 
   @spec execute_request(binary(), State.t()) :: {:ok, State.t()} | {:error, atom()}
-  defp execute_request(request, %State{connection: nil, connection_info: connection_info} = state) do
-    with {:ok, pid} <- open(connection_info) do
+  defp execute_request(request, %State{connection: nil} = state) do
+    with {:ok, pid} <- open(state.connection_info, state.connection_timeout) do
       state = %State{state | connection: pid}
       execute_request(request, state)
     end

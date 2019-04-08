@@ -35,7 +35,12 @@ defmodule Membrane.Protocol.RTSP.Transport do
   `Registry`.
   """
   @spec start_link(t(), URI.t()) :: :ignore | {:error, any()} | {:ok, pid()}
-  def start_link(transport, connection_info) do
-    GenServer.start_link(transport.module, connection_info, name: transport.key)
+  def start_link(transport, connection_info, options \\ []) do
+    args = %{
+      uri: connection_info,
+      options: options
+    }
+
+    GenServer.start_link(transport.module, args, name: transport.key)
   end
 end

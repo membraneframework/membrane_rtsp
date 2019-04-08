@@ -28,7 +28,7 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
   Starts and links session process.
 
   Sets following properties of Session:
-    * transport - information for executing request over the network for
+    * transport - information for executing request over the network. For
     reference see `Membrane.Protocol.RTSP.Transport`
     * url - a base path for requests
     * options - a keyword list that shall be passed when executing request over transport
