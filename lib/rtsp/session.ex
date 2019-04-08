@@ -20,7 +20,7 @@ defmodule Membrane.Protocol.RTSP.Session do
   Starts Supervised Session.
   """
   @spec start(binary(), module(), Keyword.t()) :: :ignore | {:error, atom()} | {:ok, t()}
-  def start(url, transport \\ TCPSocket, options \\ []) do
+  def start(url, transport \\ Transport.TCPSocket, options \\ []) do
     with {:ok, supervisor} <- RTSPSupervisor.start_child(transport, url, options) do
       {Manager, session_pid, _, _} =
         supervisor
