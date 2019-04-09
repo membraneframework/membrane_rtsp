@@ -1,6 +1,6 @@
 defmodule Membrane.Protocol.RTSP.Session do
   @moduledoc """
-
+  This module represents an active Session.
   """
   alias Membrane.Protocol.RTSP
   alias Membrane.Protocol.RTSP.Supervisor, as: RTSPSupervisor

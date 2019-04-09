@@ -2,7 +2,7 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
   @moduledoc """
   This module is responsible for managing RTSP Session.
 
-  Handles request resolution and tracking of Session ID and CSeq.
+  Handles request resolution and tracks Session ID and CSeq.
   """
   use GenServer
 
@@ -31,7 +31,8 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     * transport - information for executing request over the network. For
     reference see `Membrane.Protocol.RTSP.Transport`
     * url - a base path for requests
-    * options - a keyword list that shall be passed when executing request over transport
+    * options - a keyword list that shall be passed when executing request over
+    transport
   """
   @spec start_link(Transport.t(), binary(), Keyword.t()) :: GenServer.on_start()
   def start_link(transport, url, options) do

@@ -4,8 +4,8 @@ defmodule Membrane.Protocol.RTSP.Session.Container do
   """
   use Supervisor
 
-  alias Membrane.Protocol.RTSP.Transport
   alias Membrane.Protocol.RTSP.Session.Manager
+  alias Membrane.Protocol.RTSP.Transport
 
   @doc """
   Starts and links process that Session Manager and companion Transport process.

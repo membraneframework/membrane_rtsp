@@ -8,13 +8,13 @@ defmodule Membrane.Protocol.RTSP.Transport do
   use Bunch
   defstruct [:module, :key]
 
-  @type transport_ref :: {:via, Registry, {TransportRegistry, binary()}}
+  @type transport_ref :: {:via, Registry, {TransportRegistry, reference()}}
   @type t :: %__MODULE__{
           module: module(),
           key: transport_ref
         }
 
-  @spec new(module(), reference) :: Membrane.Protocol.RTSP.Transport.t()
+  @spec new(module(), reference()) :: Membrane.Protocol.RTSP.Transport.t()
   def new(module, key) do
     %__MODULE__{
       module: module,
