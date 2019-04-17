@@ -8,7 +8,8 @@ defmodule Membrane.Protocol.RTSP.Session.Container do
   alias Membrane.Protocol.RTSP.Transport
 
   @doc """
-  Starts and links process that Session Manager and companion Transport process.
+  Starts and links container process for the Session Manager and the companion
+  Transport process.
   """
   @spec start_link(module(), binary(), Keyword.t()) ::
           Supervisor.on_start() | {:error, :invalid_url}

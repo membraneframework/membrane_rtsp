@@ -14,7 +14,7 @@ defmodule Membrane.Protocol.RTSP.Response do
   @type t :: %__MODULE__{
           status: non_neg_integer(),
           headers: Membrane.Protocol.RTSP.headers(),
-          body: any()
+          body: SDP.Session.t() | binary()
         }
 
   @type result :: {:ok, t()} | {:error, atom()}
