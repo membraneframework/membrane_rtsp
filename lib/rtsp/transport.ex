@@ -6,7 +6,8 @@ defmodule Membrane.Protocol.RTSP.Transport do
   used for resolving transport process.
   """
   use Bunch
-  defstruct [:module, :key]
+  @enforce_keys [:module, :key]
+  defstruct @enforce_keys
 
   @type transport_ref :: {:via, Registry, {TransportRegistry, reference()}}
   @type t :: %__MODULE__{

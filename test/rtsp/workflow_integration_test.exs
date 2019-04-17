@@ -21,7 +21,8 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
   end
 
   defp workflow(url, transport, options \\ []) do
-    assert {:ok, session} = Session.start(url, transport, options)
+    assert {:ok, supervisor} = RTSP.Supervisor.start_link()
+    assert {:ok, session} = Session.new(supervisor, url, transport, options)
     assert {:ok, %Response{status: 200}} = RTSP.describe(session)
 
     assert {:ok, %Response{status: 200}} =
@@ -36,7 +37,7 @@ defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
 
     assert {:ok, %Response{status: 200}} = RTSP.play(session)
     assert {:ok, %Response{status: 200}} = RTSP.teardown(session)
-    assert :ok == Session.close(session)
+    assert :ok == Session.close(supervisor, session)
   end
 
   def resolver(request) do

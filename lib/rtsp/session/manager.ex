@@ -43,13 +43,6 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     })
   end
 
-  @doc """
-  Executes the request on a given session.
-
-  Before execution populates with a default headers setting `Session`
-  and `User-Agent` header. If the URI contains credentials they will also
-  be added unless `Authorization` header is present in request.
-  """
   @spec request(pid(), Request.t(), non_neg_integer()) :: {:ok, Response.t()} | {:error, atom()}
   def request(session, request, timeout \\ 5000) do
     GenServer.call(session, {:execute, request}, timeout)
@@ -78,8 +71,8 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     end
   end
 
-  defp execute(request, %State{uri: uri, execution_options: options} = state) do
-    %State{cseq: cseq, transport: transport} = state
+  defp execute(request, state) do
+    %State{cseq: cseq, transport: transport, uri: uri, execution_options: options} = state
 
     request
     |> Request.with_header("CSeq", cseq |> to_string())
@@ -103,7 +96,7 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
   end
 
   # Some responses does not have to return Session ID
-  # If it does return one it needs to match one stored in state
+  # If it does return one, it needs to match one stored in the state.
   defp handle_session_id(%Response{} = response, state) do
     with {:ok, session_value} <- Response.get_header(response, "Session") do
       [session_id | _] = String.split(session_value, ";")
