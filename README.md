@@ -1,6 +1,6 @@
 # Membrane Protocol RTSP
 
-RTSP client for elixir.
+RTSP client for the elixir.
 
 Currently supports only RTSP 1.1 defined by
 [RFC2326](https://tools.ietf.org/html/rfc2326)
@@ -64,27 +64,27 @@ The docs can be found at [HexDocs](https://hexdocs.pm/membrane_protocol_rtsp).
 ## Implementing custom transport layer
 
 To implement custom request execution logic you must implement
-`Membrane.Protocol.RTSP.Transport` behaviour. Then you can pass
+`Membrane.Protocol.RTSP.Transport` behavior. Then you can pass
 the name of your transport module to `Membrane.Protocol.RTSP.Session.new/4` as
 a second argument.
 
-`Membrane.Protocol.RTSP.Session.new/4` assumes that transport module also implements
-GenServer behaviour.
+`Membrane.Protocol.RTSP.Session.new/4` assumes that the transport module also implements
+GenServer behavior.
 
 ## Architecture
 
 `Session` consists of two processes: `Manager` and `Transport`.
 
-Manager is responsible for tracking `CSeq` header and `SessionId` and `Transport`
-is responsible for transmitting request and receiving response. We don't want `Manager`
+`Manager` is responsible for tracking `CSeq` header and `SessionId` and `Transport`
+is responsible for transmitting the request and receiving a response. We don't want `Manager`
 to die when `Transport` dies and vice versa, so they are started together using
-`Container`. `Container` allows starting and stopping them as one.
+`Container` which allows starting and stopping them as one.
 
 ## External tests
 
 Tests that use external RTSP service are disabled by default but they are present
 in the codebase. They are tagged as external and are usually accompanied by
-tests that mimic they behaviour by using predefined responses.
+tests that mimic their behavior by using predefined responses.
 
 ## Copyright and License
 

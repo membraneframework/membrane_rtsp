@@ -26,7 +26,7 @@ defmodule Membrane.Protocol.RTSP.Session do
         |> Supervisor.which_children()
         |> List.keyfind(Manager, 0)
 
-      {:ok, %__MODULE__{manager: session_pid, container: container}}
+      %__MODULE__{manager: session_pid, container: container}
     end
   end
 

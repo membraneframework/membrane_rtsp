@@ -28,7 +28,8 @@ defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
   end
 
   def integration_test(uri, transport, options \\ []) do
-    assert {:ok, %Session{manager: pid} = rtsp} = Session.start_link(uri, transport, options)
+    rtsp = Session.start_link(uri, transport, options)
+    assert %Session{manager: pid} = rtsp
 
     request = %Request{
       method: "DESCRIBE",
