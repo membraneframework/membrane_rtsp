@@ -1,9 +1,5 @@
 defmodule Membrane.Protocol.RTSP.Session.Manager do
-  @moduledoc """
-  This module is responsible for managing RTSP Session.
-
-  Handles request resolution and tracks Session ID and CSeq.
-  """
+  @moduledoc false
   use GenServer
 
   alias Membrane.Protocol.RTSP.{Request, Response, Transport}

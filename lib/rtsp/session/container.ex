@@ -1,7 +1,5 @@
 defmodule Membrane.Protocol.RTSP.Session.Container do
-  @moduledoc """
-  This module serves as a container for Session and Transport process combination.
-  """
+  @moduledoc false
   use Supervisor
 
   alias Membrane.Protocol.RTSP.Session.Manager

@@ -75,7 +75,7 @@ defmodule Membrane.Protocol.RTSP.Request do
 
   defp render_headers(list) do
     list
-    |> Enum.map_join("\r\n", fn elem -> header_to_string(elem) end)
+    |> Enum.map_join("\r\n", &header_to_string/1)
     |> String.replace_prefix("", "\r\n")
   end
 
