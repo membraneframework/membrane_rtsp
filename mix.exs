@@ -44,7 +44,8 @@ defmodule Membrane.Protocol.RTSP.MixProject do
       {:membrane_protocol_sdp,
        github: "membraneframework/membrane-protocol-sdp", branch: "basic-sdp"},
       {:ex_doc, "~> 0.19", only: :dev, runtime: false},
-      {:mix_test_watch, "~> 0.8", only: :dev, runtime: false}
+      {:mix_test_watch, "~> 0.8", only: :dev, runtime: false},
+      {:credo, "~> 1.0.4", only: [:dev, :test], runtime: false}
     ]
   end
 end

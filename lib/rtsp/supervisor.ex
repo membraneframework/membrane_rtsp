@@ -1,6 +1,7 @@
 defmodule Membrane.Protocol.RTSP.Supervisor do
   @moduledoc """
-
+  This module provides Supervisor you can start in your Supervision tree and use
+  with `Membrane.Protocol.RTSP.Session.new/4`.
   """
   use DynamicSupervisor
   alias Membrane.Protocol.RTSP.Session

@@ -4,7 +4,7 @@ defmodule Membrane.Protocol.RTSP.Session do
   """
   alias Membrane.Protocol.RTSP
   alias Membrane.Protocol.RTSP.{Request, Response, Transport}
-  alias Membrane.Protocol.RTSP.Session.Manager
+  alias Membrane.Protocol.RTSP.Session.{Container, Manager}
   alias Membrane.Protocol.RTSP.Supervisor, as: RTSPSupervisor
 
   defstruct [:manager, :container]
@@ -15,12 +15,13 @@ defmodule Membrane.Protocol.RTSP.Session do
         }
 
   @doc """
-  Start and links session.
+  Start and links a Session.
 
-  If an error will occur during startup, an exit signal will be sent.
+  If an error will occur during startup, an exit signal will be sent. Session
+  started this way can be stopped by calling `Supervisor.stop/3`.
   """
   def start_link(url, transport \\ Transport.TCPSocket, options \\ []) do
-    with {:ok, container} <- RTSP.Session.Container.start_link(transport, url, options) do
+    with {:ok, container} <- Container.start_link(transport, url, options) do
       {Manager, session_pid, _, _} =
         container
         |> Supervisor.which_children()
@@ -31,7 +32,7 @@ defmodule Membrane.Protocol.RTSP.Session do
   end
 
   @doc """
-  Starts a Session under supervisor.
+  Starts a Session under a `DynamicSupervisor`.
   """
   @spec new(pid(), binary(), module(), Keyword.t()) :: :ignore | {:error, atom()} | {:ok, t()}
   def new(supervisor, url, transport \\ Transport.TCPSocket, options \\ []) do
