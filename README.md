@@ -1,13 +1,14 @@
 # Membrane Protocol RTSP
 
-RTSP client for the elixir.
+Elixir RTSP client.
 
 Currently supports only RTSP 1.1 defined by
 [RFC2326](https://tools.ietf.org/html/rfc2326)
 
 ## Usage
 
-To use Membrane Protocol RTSP client you must first start a session by calling either:
+To use Membrane Protocol RTSP client you must first start a session by calling
+either:
 
 ```elixir
 alias Membrane.Protocol.RTSP
@@ -65,20 +66,20 @@ The docs can be found at [HexDocs](https://hexdocs.pm/membrane_protocol_rtsp).
 
 To implement custom request execution logic you must implement
 `Membrane.Protocol.RTSP.Transport` behavior. Then you can pass
-the name of your transport module to `Membrane.Protocol.RTSP.Session.new/4` as
-a second argument.
+the name of your transport module to `Membrane.Protocol.RTSP.Session.new/4`.
 
-`Membrane.Protocol.RTSP.Session.new/4` assumes that the transport module also implements
-GenServer behavior.
+`Membrane.Protocol.RTSP.Session.new/4` assumes that the transport module also
+implements GenServer behavior.
 
 ## Architecture
 
 `Session` consists of two processes: `Manager` and `Transport`.
 
-`Manager` is responsible for tracking `CSeq` header and `SessionId` and `Transport`
-is responsible for transmitting the request and receiving a response. We don't want `Manager`
-to die when `Transport` dies and vice versa, so they are started together using
-`Container` which allows starting and stopping them as one.
+`Manager` is responsible for tracking `CSeq` header and `SessionId` and
+`Transport` is responsible for transmitting the request and receiving a response.
+We don't want `Manager` to die when `Transport` dies and vice versa, so they are
+started together using `Container` which allows starting and stopping them as
+one.
 
 ## External tests
 

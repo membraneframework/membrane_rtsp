@@ -69,6 +69,7 @@ tags
 !.vscode/launch.json
 !.vscode/extensions.json
 .history
+.elixir_ls
 
 ### Windows ###
 # Windows thumbnail cache files
