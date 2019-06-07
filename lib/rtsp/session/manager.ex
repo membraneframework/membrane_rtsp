@@ -91,7 +91,7 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     end
   end
 
-  # Some responses does not have to return Session ID
+  # Some responses do not have to return the Session ID
   # If it does return one, it needs to match one stored in the state.
   defp handle_session_id(%Response{} = response, state) do
     with {:ok, session_value} <- Response.get_header(response, "Session") do

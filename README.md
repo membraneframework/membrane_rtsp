@@ -1,6 +1,6 @@
 # Membrane Protocol RTSP
 
-Elixir RTSP client.
+The RTSP client for Elixir
 
 Currently supports only RTSP 1.1 defined by
 [RFC2326](https://tools.ietf.org/html/rfc2326)
