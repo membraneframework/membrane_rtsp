@@ -1,0 +1,4 @@
+OPTIONS rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0
+CSeq: 2
+User-Agent: LibVLC/3.0.4 (LIVE555 Streaming Media v2016.11.28)
+
