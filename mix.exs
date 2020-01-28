@@ -39,10 +39,9 @@ defmodule Membrane.Protocol.RTSP.MixProject do
   defp deps do
     [
       {:bunch, "~> 1.0"},
+      {:membrane_protocol_sdp, "~> 0.1"},
       {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
       {:mockery, "~> 2.3.0", runtime: false},
-      {:membrane_protocol_sdp,
-       github: "membraneframework/membrane-protocol-sdp", branch: "basic-sdp"},
       {:ex_doc, "~> 0.19", only: :dev, runtime: false},
       {:mix_test_watch, "~> 0.8", only: :dev, runtime: false},
       {:credo, "~> 1.0.4", only: [:dev, :test], runtime: false}
