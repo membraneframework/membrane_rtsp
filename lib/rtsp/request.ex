@@ -60,7 +60,7 @@ defmodule Membrane.Protocol.RTSP.Request do
     ])
   end
 
-  defp process_uri(request, uri) do
+  def process_uri(request, uri) do
     %URI{uri | userinfo: nil}
     |> to_string()
     |> apply_path(request)
