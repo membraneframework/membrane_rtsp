@@ -14,23 +14,19 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
                   :session_id,
                   cseq: 0,
                   execution_options: [],
-                  auth_options: %{
-                    type: nil,
-                    realm: nil,
-                    nonce: nil
-                  }
+                  auth: nil
                 ]
 
+    @type digest_opts() :: %{
+            realm: String.t() | nil,
+            nonce: String.t() | nil
+          }
     @type t :: %__MODULE__{
             transport: Transport.t(),
             cseq: non_neg_integer(),
             uri: URI.t(),
             session_id: binary() | nil,
-            auth_options: %{
-              type: :digest | :basic | nil,
-              realm: String.t() | nil,
-              nonce: String.t() | nil
-            },
+            auth: nil | :basic | {:digest, digest_opts()},
             execution_options: Keyword.t()
           }
   end
@@ -61,15 +57,19 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
 
   @impl true
   def init(%{transport: transport, url: url, options: options}) do
+    auth_type =
+      case url do
+        %URI{userinfo: nil} -> nil
+        # default to basic. If it is actually digest, it will get set
+        # when the correct header is detected
+        %URI{userinfo: info} when is_binary(info) -> :basic
+      end
+
     state = %State{
       transport: transport,
       uri: url,
       execution_options: options,
-      auth_options: %{
-        nonce: nil,
-        realm: nil,
-        type: nil
-      }
+      auth: auth_type
     }
 
     {:ok, state}
@@ -80,7 +80,7 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     with {:ok, raw_response} <- execute(request, state),
          {:ok, parsed_response} <- Response.parse(raw_response),
          {:ok, state} <- handle_session_id(parsed_response, state),
-         {:ok, state} <- handle_nonce(parsed_response, state) do
+         {:ok, state} <- detect_authentication_type(parsed_response, state) do
       state = %State{state | cseq: cseq + 1}
       {:reply, {:ok, parsed_response}, state}
     else
@@ -94,29 +94,29 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     request
     |> Request.with_header("CSeq", cseq |> to_string())
     |> Request.with_header("User-Agent", @user_agent)
-    |> apply_credentials(uri, state.auth_options)
+    |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
     |> transport.module.execute(transport.key, options)
   end
 
   defp apply_credentials(request, %URI{userinfo: nil}, _auth_options), do: request
 
-  defp apply_credentials(%Request{headers: headers} = request, uri, auth_options) do
+  defp apply_credentials(%Request{headers: headers} = request, uri, auth) do
     case List.keyfind(headers, "Authorization", 0) do
       {"Authorization", _} ->
         request
 
       _ ->
-        do_apply_credentials(request, uri, auth_options)
+        do_apply_credentials(request, uri, auth)
     end
   end
 
-  defp do_apply_credentials(request, %URI{userinfo: info}, %{type: :basic}) do
+  defp do_apply_credentials(request, %URI{userinfo: info}, :basic) do
     encoded = Base.encode64(info)
     Request.with_header(request, "Authorization", "Basic " <> encoded)
   end
 
-  defp do_apply_credentials(request, %URI{} = uri, %{type: :digest} = options) do
+  defp do_apply_credentials(request, %URI{} = uri, {:digest, options}) do
     encoded = encode_digest(request, uri, options)
     Request.with_header(request, "Authorization", encoded)
   end
@@ -169,11 +169,13 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     end
   end
 
-  defp handle_nonce(%Response{} = response, state) do
+  # Checks for the `nonce` and `realm` values in the `WWW-Authenticate` header.
+  # if they exist, sets `type` to `{:digest, opts}`
+  defp detect_authentication_type(%Response{} = response, state) do
     with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
       [_, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
       [_, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
-      auth_options = %{nonce: nonce, realm: realm, type: :digest}
+      auth_options = %{type: {:digest, %{nonce: nonce, realm: realm}}}
       {:ok, %{state | auth_options: auth_options}}
     else
       # non digest auth?
