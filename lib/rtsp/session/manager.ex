@@ -9,13 +9,24 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
   defmodule State do
     @moduledoc false
     @enforce_keys [:transport, :uri]
-    defstruct @enforce_keys ++ [:session_id, cseq: 0, execution_options: []]
+    defstruct @enforce_keys ++
+                [
+                  :session_id,
+                  cseq: 0,
+                  execution_options: [],
+                  auth: nil
+                ]
 
+    @type digest_opts() :: %{
+            realm: String.t() | nil,
+            nonce: String.t() | nil
+          }
     @type t :: %__MODULE__{
             transport: Transport.t(),
             cseq: non_neg_integer(),
             uri: URI.t(),
             session_id: binary() | nil,
+            auth: nil | :basic | {:digest, digest_opts()},
             execution_options: Keyword.t()
           }
   end
@@ -46,10 +57,19 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
 
   @impl true
   def init(%{transport: transport, url: url, options: options}) do
+    auth_type =
+      case url do
+        %URI{userinfo: nil} -> nil
+        # default to basic. If it is actually digest, it will get set
+        # when the correct header is detected
+        %URI{userinfo: info} when is_binary(info) -> :basic
+      end
+
     state = %State{
       transport: transport,
       uri: url,
-      execution_options: options
+      execution_options: options,
+      auth: auth_type
     }
 
     {:ok, state}
@@ -59,7 +79,8 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
   def handle_call({:execute, request}, _from, %State{cseq: cseq} = state) do
     with {:ok, raw_response} <- execute(request, state),
          {:ok, parsed_response} <- Response.parse(raw_response),
-         {:ok, state} <- handle_session_id(parsed_response, state) do
+         {:ok, state} <- handle_session_id(parsed_response, state),
+         {:ok, state} <- detect_authentication_type(parsed_response, state) do
       state = %State{state | cseq: cseq + 1}
       {:reply, {:ok, parsed_response}, state}
     else
@@ -73,22 +94,63 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
     request
     |> Request.with_header("CSeq", cseq |> to_string())
     |> Request.with_header("User-Agent", @user_agent)
-    |> apply_credentials(uri)
+    |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
     |> transport.module.execute(transport.key, options)
   end
 
-  defp apply_credentials(request, %URI{userinfo: nil}), do: request
+  defp apply_credentials(request, %URI{userinfo: nil}, _auth_options), do: request
 
-  defp apply_credentials(%Request{headers: headers} = request, %URI{userinfo: info}) do
+  defp apply_credentials(%Request{headers: headers} = request, uri, auth) do
     case List.keyfind(headers, "Authorization", 0) do
       {"Authorization", _} ->
         request
 
       _ ->
-        encoded = Base.encode64(info)
-        Request.with_header(request, "Authorization", "Basic " <> encoded)
+        do_apply_credentials(request, uri, auth)
     end
+  end
+
+  defp do_apply_credentials(request, %URI{userinfo: info}, :basic) do
+    encoded = Base.encode64(info)
+    Request.with_header(request, "Authorization", "Basic " <> encoded)
+  end
+
+  defp do_apply_credentials(request, %URI{} = uri, {:digest, options}) do
+    encoded = encode_digest(request, uri, options)
+    Request.with_header(request, "Authorization", encoded)
+  end
+
+  defp do_apply_credentials(request, _, _) do
+    request
+  end
+
+  defp encode_digest(request, %URI{userinfo: userinfo} = uri, options) do
+    [username, password] = String.split(userinfo, ":", parts: 2)
+    encoded_uri = Request.process_uri(request, uri)
+    ha1 = md5([username, options.realm, password])
+    ha2 = md5([request.method, encoded_uri])
+    response = md5([ha1, options.nonce, ha2])
+
+    Enum.join(
+      [
+        "Digest",
+        ~s(username="#{username}",),
+        ~s(realm="#{options.realm}",),
+        ~s(nonce="#{options.nonce}",),
+        ~s(uri="#{encoded_uri}",),
+        ~s(response="#{response}")
+      ],
+      " "
+    )
+  end
+
+  defp md5(value) do
+    value
+    |> Enum.join(":")
+    |> IO.iodata_to_binary()
+    |> :erlang.md5()
+    |> Base.encode16(case: :lower)
   end
 
   # Some responses do not have to return the Session ID
@@ -104,6 +166,24 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
       end
     else
       {:error, :no_such_header} -> {:ok, state}
+    end
+  end
+
+  # Checks for the `nonce` and `realm` values in the `WWW-Authenticate` header.
+  # if they exist, sets `type` to `{:digest, opts}`
+  defp detect_authentication_type(%Response{} = response, state) do
+    with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
+      [_, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
+      [_, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
+      auth_options = %{type: {:digest, %{nonce: nonce, realm: realm}}}
+      {:ok, %{state | auth_options: auth_options}}
+    else
+      # non digest auth?
+      {:ok, _} ->
+        {:ok, %{state | auth_options: %{state.auth_options | type: :basic}}}
+
+      {:error, :no_such_header} ->
+        {:ok, state}
     end
   end
 end

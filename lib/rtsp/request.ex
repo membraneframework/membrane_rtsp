@@ -60,7 +60,13 @@ defmodule Membrane.Protocol.RTSP.Request do
     ])
   end
 
-  defp process_uri(request, uri) do
+  @doc """
+  Returns the encoded URI as a binary. This is handy for 
+  digest auth since this value must be encoded as per the digest
+  algorithm
+  """
+  @spec process_uri(t(), URI.t()) :: binary()
+  def process_uri(request, uri) do
     %URI{uri | userinfo: nil}
     |> to_string()
     |> apply_path(request)

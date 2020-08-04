@@ -81,7 +81,7 @@ defmodule Membrane.Protocol.RTSP.SessionManagerTest do
       end)
 
       parsed_uri = URI.parse("rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov")
-      state = %State{state | uri: parsed_uri}
+      state = %State{state | uri: parsed_uri, auth: :basic}
 
       assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
 
@@ -105,5 +105,25 @@ defmodule Membrane.Protocol.RTSP.SessionManagerTest do
 
       assert_called(Fake, proxy: 2)
     end
+  end
+
+  test "digest auth", %{state: state, request: request} do
+    credentials = "login:password"
+
+    mock(Fake, [proxy: 2], fn serialized_request, _ref ->
+      assert String.contains?(
+               serialized_request,
+               "\r\nAuthorization: Digest username=\"login\", realm=\"realm\", nonce=\"nonce\", uri=\"rtsp://domain.net:554/vod/mp4:name.mov\", response=\"13afc9c7a879e7fbd27bab70d472c4fc\"\r\n"
+             )
+    end)
+
+    parsed_uri = URI.parse("rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov")
+    digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm"}}
+
+    state = %State{state | uri: parsed_uri, auth: digest_auth_options}
+
+    assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+
+    assert_called(Fake, proxy: 2)
   end
 end
