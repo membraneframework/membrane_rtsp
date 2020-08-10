@@ -9,7 +9,7 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
 
   @expected_query """
                   DESCRIBE rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0
-                  User-Agent: MembraneRTSP/0.1.0 (Membrane Framework RTSP Client)
+                  User-Agent: MembraneRTSP/0.2.0 (Membrane Framework RTSP Client)
                   CSeq: 0\n
                   """
                   |> String.replace("\n", "\r\n")
