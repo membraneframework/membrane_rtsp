@@ -1,4 +1,4 @@
-defmodule Membrane.Protocol.RTSP.Request do
+defmodule Membrane.RTSP.Request do
   @moduledoc """
   This module represents a RTSP 1.0 request.
   """
@@ -8,7 +8,7 @@ defmodule Membrane.Protocol.RTSP.Request do
   @type t :: %__MODULE__{
           method: binary(),
           body: binary(),
-          headers: Membrane.Protocol.RTSP.headers(),
+          headers: Membrane.RTSP.headers(),
           path: nil | binary()
         }
 
@@ -61,7 +61,7 @@ defmodule Membrane.Protocol.RTSP.Request do
   end
 
   @doc """
-  Returns the encoded URI as a binary. This is handy for 
+  Returns the encoded URI as a binary. This is handy for
   digest auth since this value must be encoded as per the digest
   algorithm
   """

@@ -1,4 +1,4 @@
-defmodule Membrane.Protocol.RTSP.Transport.TCPSocket do
+defmodule Membrane.RTSP.Transport.TCPSocket do
   @moduledoc """
   This module implements the Transport behaviour and transmits requests over TCP
   Socket keeping connection until either session is closed or connection is
@@ -11,7 +11,7 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocket do
   use GenServer
   import Mockery.Macro
 
-  @behaviour Membrane.Protocol.RTSP.Transport
+  @behaviour Membrane.RTSP.Transport
   @default_timeout 5000
   @connection_timeout 1000
 

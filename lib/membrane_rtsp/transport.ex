@@ -1,4 +1,4 @@
-defmodule Membrane.Protocol.RTSP.Transport do
+defmodule Membrane.RTSP.Transport do
   @moduledoc """
   This module represents the Transport contract.
 
@@ -15,7 +15,7 @@ defmodule Membrane.Protocol.RTSP.Transport do
           key: transport_ref
         }
 
-  @spec new(module(), reference()) :: Membrane.Protocol.RTSP.Transport.t()
+  @spec new(module(), reference()) :: Membrane.RTSP.Transport.t()
   def new(module, key) do
     %__MODULE__{
       module: module,

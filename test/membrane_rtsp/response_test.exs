@@ -1,7 +1,7 @@
-defmodule Membrane.Protocol.RTSP.ResponseTest do
+defmodule Membrane.RTSP.ResponseTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP.Response
+  alias Membrane.RTSP.Response
   alias Membrane.Protocol.SDP.Session
   doctest Response
 

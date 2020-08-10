@@ -1,8 +1,8 @@
-defmodule Membrane.Protocol.RTSP.Transport.TCPSocketTest do
+defmodule Membrane.RTSP.Transport.TCPSocketTest do
   use ExUnit.Case
   import Mockery
   import Mockery.Assertions
-  alias Membrane.Protocol.RTSP.Transport.TCPSocket
+  alias Membrane.RTSP.Transport.TCPSocket
 
   setup do
     state = %TCPSocket.State{
@@ -46,7 +46,7 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocketTest do
       mock(:gen_tcp, [send: 2], :ok)
 
       assert {:noreply,
-              %Membrane.Protocol.RTSP.Transport.TCPSocket.State{
+              %Membrane.RTSP.Transport.TCPSocket.State{
                 connection: conn,
                 caller: caller
               }} = TCPSocket.handle_call({:execute, "123"}, self(), state)
@@ -61,7 +61,7 @@ defmodule Membrane.Protocol.RTSP.Transport.TCPSocketTest do
 
       assert {:noreply, result_state} = TCPSocket.handle_call({:execute, "123"}, self(), state)
 
-      assert %Membrane.Protocol.RTSP.Transport.TCPSocket.State{
+      assert %Membrane.RTSP.Transport.TCPSocket.State{
                connection: conn,
                caller: caller
              } = result_state

@@ -1,9 +1,9 @@
-defmodule Membrane.Protocol.RTSP.WorkflowIntegrationTest do
+defmodule Membrane.RTSP.WorkflowIntegrationTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP
-  alias Membrane.Protocol.RTSP.{Response, Session}
-  alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
+  alias Membrane.RTSP
+  alias Membrane.RTSP.{Response, Session}
+  alias Membrane.RTSP.Transport.{Fake, TCPSocket}
 
   describe "RTSP workflow executes" do
     @tag external: true

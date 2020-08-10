@@ -1,11 +1,11 @@
-defmodule Membrane.Protocol.RTSP.Session do
+defmodule Membrane.RTSP.Session do
   @moduledoc """
   This module represents an active Session.
   """
-  alias Membrane.Protocol.RTSP
-  alias Membrane.Protocol.RTSP.{Request, Response, Transport}
-  alias Membrane.Protocol.RTSP.Session.{Container, Manager}
-  alias Membrane.Protocol.RTSP.Supervisor, as: RTSPSupervisor
+  alias Membrane.RTSP
+  alias Membrane.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP.Session.{Container, Manager}
+  alias Membrane.RTSP.Supervisor, as: RTSPSupervisor
 
   defstruct [:manager, :container]
 

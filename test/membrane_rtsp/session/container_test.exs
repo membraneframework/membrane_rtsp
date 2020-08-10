@@ -1,7 +1,7 @@
-defmodule Membrane.Protocol.RTSP.Session.ContainerTest do
+defmodule Membrane.RTSP.Session.ContainerTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP.{Session, Transport}
+  alias Membrane.RTSP.{Session, Transport}
 
   @parsed_uri %URI{
     authority: "domain.com:554",

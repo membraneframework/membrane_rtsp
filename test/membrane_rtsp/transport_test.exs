@@ -1,8 +1,8 @@
-defmodule Membrane.Protocol.RTSP.TransportTest do
+defmodule Membrane.RTSP.TransportTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP.Transport
-  alias Membrane.Protocol.RTSP.Transport.Fake
+  alias Membrane.RTSP.Transport
+  alias Membrane.RTSP.Transport.Fake
 
   test "Transport process registers self immediately" do
     unique_ref = "12332313123123rtsp://magicklink.compile"

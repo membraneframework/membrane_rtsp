@@ -1,13 +1,13 @@
-defmodule Membrane.Protocol.RTSP.MixProject do
+defmodule Membrane.RTSP.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
 
   def project do
     [
-      app: :membrane_protocol_rtsp,
+      app: :membrane_rtsp,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.9",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -18,10 +18,10 @@ defmodule Membrane.Protocol.RTSP.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: ["README.md", "LICENSE"],
       source_ref: "v#{@version}",
       nest_modules_by_prefix: [
-        Membrane.Protocol.RTSP
+        Membrane.RTSP
       ]
     ]
   end
@@ -32,7 +32,7 @@ defmodule Membrane.Protocol.RTSP.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Membrane.Protocol.RTSP.Application, []}
+      mod: {Membrane.RTSP.Application, []}
     ]
   end
 
