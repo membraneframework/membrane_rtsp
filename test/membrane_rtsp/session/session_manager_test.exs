@@ -1,10 +1,10 @@
-defmodule Membrane.Protocol.RTSP.SessionManagerTest do
+defmodule Membrane.RTSP.SessionManagerTest do
   use ExUnit.Case
   use Bunch
 
-  alias Membrane.Protocol.RTSP.{Request, Session.Manager, Transport}
-  alias Membrane.Protocol.RTSP.Session.Manager.State
-  alias Membrane.Protocol.RTSP.Transport.Fake
+  alias Membrane.RTSP.{Request, Session.Manager, Transport}
+  alias Membrane.RTSP.Session.Manager.State
+  alias Membrane.RTSP.Transport.Fake
 
   import Mockery
   import Mockery.Assertions

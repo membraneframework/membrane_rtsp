@@ -1,9 +1,9 @@
-defmodule Membrane.Protocol.RTSP.Transport.TCPSocketIntegrationTest do
+defmodule Membrane.RTSP.Transport.TCPSocketIntegrationTest do
   use ExUnit.Case
   use Bunch
 
-  alias Membrane.Protocol.RTSP.Transport
-  alias Membrane.Protocol.RTSP.Transport.TCPSocket
+  alias Membrane.RTSP.Transport
+  alias Membrane.RTSP.Transport.TCPSocket
 
   describe "TCP Socket" do
     @tag external: true

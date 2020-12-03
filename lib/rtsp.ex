@@ -1,9 +1,9 @@
-defmodule Membrane.Protocol.RTSP do
+defmodule Membrane.RTSP do
   @moduledoc """
   This module provides a functionality to open a session, execute a RTSP requests
   through that session and close the session.
   """
-  alias Membrane.Protocol.RTSP.{Response, Session}
+  alias Membrane.RTSP.{Response, Session}
 
   @type headers :: [{binary(), binary()}]
 

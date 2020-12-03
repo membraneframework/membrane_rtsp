@@ -1,8 +1,8 @@
-defmodule Membrane.Protocol.RTSP.SessionTest do
+defmodule Membrane.RTSP.SessionTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP
-  alias Membrane.Protocol.RTSP.{Session, Transport}
+  alias Membrane.RTSP
+  alias Membrane.RTSP.{Session, Transport}
 
   setup_all do
     {:ok, supervisor} = RTSP.Supervisor.start_link()

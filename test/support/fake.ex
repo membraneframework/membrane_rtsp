@@ -1,9 +1,9 @@
-defmodule Membrane.Protocol.RTSP.Transport.Fake do
+defmodule Membrane.RTSP.Transport.Fake do
   @moduledoc false
   use GenServer
   import Mockery.Macro
 
-  @behaviour Membrane.Protocol.RTSP.Transport
+  @behaviour Membrane.RTSP.Transport
   @response "RTSP/1.0 200 OK\r\n"
 
   @impl true

@@ -1,15 +1,17 @@
-defmodule Membrane.Protocol.RTSP.MixProject do
+defmodule Membrane.RTSP.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
 
   def project do
     [
-      app: :membrane_protocol_rtsp,
+      app: :membrane_rtsp,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      name: "Membrane RTSP",
+      description: "RTSP client for Elixir",
       deps: deps(),
       docs: docs()
     ]
@@ -18,10 +20,10 @@ defmodule Membrane.Protocol.RTSP.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: ["README.md", "LICENSE"],
       source_ref: "v#{@version}",
       nest_modules_by_prefix: [
-        Membrane.Protocol.RTSP
+        Membrane.RTSP
       ]
     ]
   end
@@ -32,17 +34,17 @@ defmodule Membrane.Protocol.RTSP.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Membrane.Protocol.RTSP.Application, []}
+      mod: {Membrane.RTSP.Application, []}
     ]
   end
 
   defp deps do
     [
       {:bunch, "~> 1.0"},
-      {:membrane_protocol_sdp, "~> 0.1"},
-      {:dialyxir, "~> 1.0.0-rc.4", only: [:dev], runtime: false},
+      {:membrane_protocol_sdp, "~> 0.1.0"},
+      {:dialyxir, "~> 1.0.0", only: [:dev], runtime: false},
       {:mockery, "~> 2.3.0", runtime: false},
-      {:ex_doc, "~> 0.19", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.23", only: :dev, runtime: false},
       {:mix_test_watch, "~> 0.8", only: :dev, runtime: false},
       {:credo, "~> 1.0.4", only: [:dev, :test], runtime: false}
     ]

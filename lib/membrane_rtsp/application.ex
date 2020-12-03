@@ -1,4 +1,4 @@
-defmodule Membrane.Protocol.RTSP.Application do
+defmodule Membrane.RTSP.Application do
   @moduledoc false
   use Application
 

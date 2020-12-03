@@ -1,15 +1,15 @@
-defmodule Membrane.Protocol.RTSP.Session.IntegrationTest do
+defmodule Membrane.RTSP.Session.IntegrationTest do
   use ExUnit.Case, async: false
   use Bunch
 
-  alias Membrane.Protocol.RTSP.{Request, Response, Session}
-  alias Membrane.Protocol.RTSP.Session.Manager
-  alias Membrane.Protocol.RTSP.Transport.{Fake, TCPSocket}
+  alias Membrane.RTSP.{Request, Response, Session}
+  alias Membrane.RTSP.Session.Manager
+  alias Membrane.RTSP.Transport.{Fake, TCPSocket}
   alias Membrane.Protocol.SDP
 
   @expected_query """
                   DESCRIBE rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov RTSP/1.0
-                  User-Agent: MembraneRTSP/0.1.0 (Membrane Framework RTSP Client)
+                  User-Agent: MembraneRTSP/0.2.0 (Membrane Framework RTSP Client)
                   CSeq: 0\n
                   """
                   |> String.replace("\n", "\r\n")

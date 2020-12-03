@@ -1,6 +1,6 @@
 defmodule Membrane.Support.Factory.SampleOptionsRequest do
   @moduledoc false
-  alias Membrane.Protocol.RTSP.Request
+  alias Membrane.RTSP.Request
 
   @external_resource "test/support/fixtures/options_request.bin"
   @spec raw() :: binary()
@@ -20,7 +20,7 @@ defmodule Membrane.Support.Factory.SampleOptionsRequest do
       {"User-Agent", "LibVLC/3.0.4 (LIVE555 Streaming Media v2016.11.28)"}
     ]
 
-  @spec request() :: Membrane.Protocol.RTSP.Request.t()
+  @spec request() :: Membrane.RTSP.Request.t()
   def request,
     do: %Request{
       method: method(),

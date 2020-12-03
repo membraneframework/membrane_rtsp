@@ -1,17 +1,35 @@
-# Membrane Protocol RTSP
+# Membrane RTSP
+
+[![Hex.pm](https://img.shields.io/hexpm/v/membrane_rtsp.svg)](https://hex.pm/packages/membrane_rtsp)
+[![API Docs](https://img.shields.io/badge/api-docs-yellow.svg?style=flat)](https://hexdocs.pm/membrane_rtsp/)
+[![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtsp.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtsp)
+
 
 The RTSP client for Elixir
 
 Currently supports only RTSP 1.1 defined by
 [RFC2326](https://tools.ietf.org/html/rfc2326)
 
+## Installation
+
+The package can be installed by adding `membrane_rtsp` to your list
+of dependencies in `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:membrane_rtsp, "~> 0.2.0"}
+  ]
+end
+```
+
 ## Usage
 
-To use Membrane Protocol RTSP client you must first start a session by calling
+To use Membrane RTSP client you must first start a session by calling
 either:
 
 ```elixir
-alias Membrane.Protocol.RTSP
+alias Membrane.RTSP
 
 # It will exit if Session can't be started
 {:ok, session} = RTSP.Session.start_link("rtsp://domain.name:port/path")
@@ -23,7 +41,7 @@ alias Membrane.Protocol.RTSP
 Then you can proceed with executing requests:
 
 ```elixir
-alias Membrane.Protocol.RTSP.Response
+alias Membrane.RTSP.Response
 
 {:ok, %Response{status: 200}} = RTSP.describe(session)
 
@@ -47,28 +65,14 @@ by calling:
 RTSP.close(supervisor, session)
 ```
 
-## Installation
-
-The package can be installed by adding `membrane_rtsp` to your list
-of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:membrane_rtsp, "~> 0.1.0"}
-  ]
-end
-```
-
-The docs can be found at [HexDocs](https://hexdocs.pm/membrane_protocol_rtsp).
 
 ## Implementing custom transport layer
 
 To implement custom request execution logic you must implement
-`Membrane.Protocol.RTSP.Transport` behavior. Then you can pass
-the name of your transport module to `Membrane.Protocol.RTSP.Session.new/4`.
+`Membrane.RTSP.Transport` behavior. Then you can pass
+the name of your transport module to `Membrane.RTSP.Session.new/4`.
 
-`Membrane.Protocol.RTSP.Session.new/4` assumes that the transport module also
+`Membrane.RTSP.Session.new/4` assumes that the transport module also
 implements GenServer behavior.
 
 ## Architecture

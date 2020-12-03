@@ -1,4 +1,4 @@
-defmodule Membrane.Protocol.RTSP.Response do
+defmodule Membrane.RTSP.Response do
   @moduledoc """
   This module represents a RTSP response.
   """
@@ -13,7 +13,7 @@ defmodule Membrane.Protocol.RTSP.Response do
 
   @type t :: %__MODULE__{
           status: non_neg_integer(),
-          headers: Membrane.Protocol.RTSP.headers(),
+          headers: Membrane.RTSP.headers(),
           body: SDP.Session.t() | binary()
         }
 

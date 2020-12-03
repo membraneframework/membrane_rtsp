@@ -1,8 +1,8 @@
-defmodule Membrane.Protocol.RTSP.Session.Manager do
+defmodule Membrane.RTSP.Session.Manager do
   @moduledoc false
   use GenServer
 
-  alias Membrane.Protocol.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP.{Request, Response, Transport}
 
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
@@ -36,7 +36,7 @@ defmodule Membrane.Protocol.RTSP.Session.Manager do
 
   Sets following properties of Session:
     * transport - information for executing request over the network. For
-    reference see `Membrane.Protocol.RTSP.Transport`
+    reference see `Membrane.RTSP.Transport`
     * url - a base path for requests
     * options - a keyword list that shall be passed when executing request over
     transport

@@ -1,7 +1,7 @@
-defmodule Membrane.Protocol.RTSP.RequestTest do
+defmodule Membrane.RTSP.RequestTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.RTSP.Request
+  alias Membrane.RTSP.Request
   alias Membrane.Support.Factory
   doctest Request
 
