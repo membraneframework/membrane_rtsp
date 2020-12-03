@@ -2,6 +2,7 @@ defmodule Membrane.RTSP.MixProject do
   use Mix.Project
 
   @version "0.2.0"
+  @github_url "https://github.com/membraneframework/membrane_rtsp"
 
   def project do
     [
@@ -12,8 +13,10 @@ defmodule Membrane.RTSP.MixProject do
       start_permanent: Mix.env() == :prod,
       name: "Membrane RTSP",
       description: "RTSP client for Elixir",
-      deps: deps(),
-      docs: docs()
+      source_url: @github_url,
+      package: package(),
+      docs: docs(),
+      deps: deps()
     ]
   end
 
@@ -25,6 +28,17 @@ defmodule Membrane.RTSP.MixProject do
       nest_modules_by_prefix: [
         Membrane.RTSP
       ]
+    ]
+  end
+
+  defp package do
+    [
+      maintainers: ["Membrane Team"],
+      licenses: ["Apache 2.0"],
+      links: %{
+        "GitHub" => @github_url,
+        "Membrane Framework Homepage" => "https://membraneframework.org"
+      }
     ]
   end
 
