@@ -41,7 +41,6 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   end
 
   def resolver(request) do
-    IO.inspect(request)
     {_request, response} = List.keyfind(request_mappings(), request, 0)
     response
   end
