@@ -89,14 +89,28 @@ defmodule Membrane.RTSP.Session.Manager do
   end
 
   defp execute(request, state) do
-    %State{cseq: cseq, transport: transport, uri: uri, execution_options: options} = state
+    %State{
+      cseq: cseq,
+      transport: transport,
+      uri: uri,
+      session_id: session_id,
+      execution_options: options
+    } = state
 
     request
+    |> inject_session_header(session_id)
     |> Request.with_header("CSeq", cseq |> to_string())
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
     |> transport.module.execute(transport.key, options)
+  end
+
+  defp inject_session_header(request, session_id) do
+    case session_id do
+      nil -> request
+      session -> Request.with_header(request, "Session", session)
+    end
   end
 
   defp apply_credentials(request, %URI{userinfo: nil}, _auth_options), do: request
@@ -175,12 +189,12 @@ defmodule Membrane.RTSP.Session.Manager do
     with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
       [_, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
       [_, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
-      auth_options = %{type: {:digest, %{nonce: nonce, realm: realm}}}
-      {:ok, %{state | auth_options: auth_options}}
+      auth_options = {:digest, %{nonce: nonce, realm: realm}}
+      {:ok, %{state | auth: auth_options}}
     else
       # non digest auth?
       {:ok, _} ->
-        {:ok, %{state | auth_options: %{state.auth_options | type: :basic}}}
+        {:ok, %{state | auth: :basic}}
 
       {:error, :no_such_header} ->
         {:ok, state}

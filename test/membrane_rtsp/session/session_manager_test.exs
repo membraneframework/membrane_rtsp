@@ -66,6 +66,17 @@ defmodule Membrane.RTSP.SessionManagerTest do
       assert_called(Fake, proxy: 2)
     end
 
+    test "add session_id header to request", %{request: request, state: state} do
+      session_id = "arbitrary_string"
+      state = %State{state | session_id: session_id}
+
+      mock(Fake, [proxy: 2], fn serialized_request, _ ->
+        assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
+      end)
+
+      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+    end
+
     test "applies credentials to request if they were provided in the uri", %{
       state: state,
       request: request
@@ -105,6 +116,20 @@ defmodule Membrane.RTSP.SessionManagerTest do
 
       assert_called(Fake, proxy: 2)
     end
+  end
+
+  test "add digest information in the state", %{state: state, request: request} do
+    resolver = fn _ ->
+      {:ok, "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"realm\", nonce=\"nonce\"\r\n\r\n"}
+    end
+
+    state = %State{state | execution_options: [resolver: resolver]}
+
+    assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+
+    assert state.auth == {:digest, %{nonce: "nonce", realm: "realm"}}
+
+    assert_called(Fake, proxy: 2)
   end
 
   test "digest auth", %{state: state, request: request} do
