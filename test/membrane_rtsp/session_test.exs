@@ -16,7 +16,7 @@ defmodule Membrane.RTSP.SessionTest do
 
     test "start fails when server can not be reached", %{supervisor: supervisor} do
       assert {:error, reason} = Session.new(supervisor, "rtsp://non.existent.domain.com:444")
-      assert reason == {:shutdown, {:failed_to_start_child, Transport, :timeout}}
+      assert reason == {:shutdown, {:failed_to_start_child, Transport, :nxdomain}}
     end
   end
 end

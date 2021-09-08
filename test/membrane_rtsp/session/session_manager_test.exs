@@ -120,7 +120,8 @@ defmodule Membrane.RTSP.SessionManagerTest do
 
   test "add digest information in the state", %{state: state, request: request} do
     resolver = fn _ ->
-      {:ok, "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"realm\", nonce=\"nonce\"\r\n\r\n"}
+      {:ok,
+       "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"realm\", nonce=\"nonce\"\r\n\r\n"}
     end
 
     state = %State{state | execution_options: [resolver: resolver]}
