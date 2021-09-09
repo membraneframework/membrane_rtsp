@@ -1,15 +1,12 @@
 defmodule Membrane.RTSP.Transport.Fake do
   @moduledoc false
   use GenServer
-  import Mockery.Macro
 
   @behaviour Membrane.RTSP.Transport
   @response "RTSP/1.0 200 OK\r\n"
 
   @impl true
-  def execute(request, ref, options) do
-    mockable(__MODULE__).proxy(request, ref)
-    resolver = Keyword.get(options, :resolver, &__MODULE__.default_resolver/1)
+  def execute(request, resolver \\ &__MODULE__.default_resolver/1) do
     resolver.(request)
   end
 

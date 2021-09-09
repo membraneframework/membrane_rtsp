@@ -14,10 +14,6 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
         TCPSocket
       )
     end
-
-    test "without internet" do
-      workflow("rtsp://domain.net:554/vod/mp4:mobvie.mov", Fake, resolver: &resolver/1)
-    end
   end
 
   defp workflow(url, transport, options \\ []) do

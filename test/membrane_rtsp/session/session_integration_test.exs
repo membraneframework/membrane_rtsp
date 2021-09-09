@@ -21,15 +21,10 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
     test "real transport" do
       integration_test(@uri, TCPSocket)
     end
-
-    test "fake transport" do
-      integration_test(@uri, Fake, resolver: &resolver/1)
-    end
   end
 
   def integration_test(uri, transport, options \\ []) do
-    rtsp = Session.start_link(uri, transport, options)
-    assert %Session{manager: pid} = rtsp
+    {:ok, pid} = Session.start_link(uri, transport, options)
 
     request = %Request{
       method: "DESCRIBE",

@@ -10,17 +10,13 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   """
   import Mockery.Macro
 
-  @default_timeout 5000
   @connection_timeout 1000
 
-  @spec init(%{uri: URI.t(), options: keyword()}) :: {:error, reason :: any()} | {:ok, any()}
-  def init(%{uri: %URI{} = connection_info, options: options}) do
-    connection_timeout = Keyword.get(options, :connection_timeout, @connection_timeout)
-
+  def init(%URI{} = connection_info, connection_timeout \\ @connection_timeout) do
     with {:ok, socket} <- open(connection_info, connection_timeout) do
       {:ok, socket}
     else
-      {:error, reason} -> {:stop, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -33,13 +29,13 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     )
   end
 
-  @spec execute(binary(), any()) :: {:ok, binary()} | {:error, atom()}
+  @spec execute(any(), any()) :: {:ok, binary()} | {:error, atom()}
   def execute(request, socket) do
     with :ok <- mockable(:gen_tcp).send(socket, request),
          {:ok, data} <- recv() do
       {:ok, data}
     else
-      {:error, reason} = error -> error
+      {:error, _reason} = error -> error
     end
   end
 

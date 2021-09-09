@@ -1,12 +1,10 @@
-defmodule Membrane.RTSP.Session.Manager do
+defmodule Membrane.RTSP.Session do
   @moduledoc false
   use GenServer
 
   alias Membrane.RTSP.{Request, Response, Transport}
   import Membrane.RTSP.Manager.Logic
   alias Membrane.RTSP.Manager.Logic.State
-
-  @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   @doc """
   Starts and links session process.
@@ -19,12 +17,19 @@ defmodule Membrane.RTSP.Session.Manager do
     transport
   """
   @spec start_link(Transport.t(), binary(), Keyword.t()) :: GenServer.on_start()
-  def start_link(transport, url, options) do
-    GenServer.start_link(__MODULE__, %{
-      transport: transport,
-      url: url,
-      options: options
-    })
+  def start_link(transport \\ Membrane.RTSP.Transport.TCPSocket, url, options \\ []) do
+    case URI.parse(url) do
+      %URI{port: port, host: host, scheme: "rtsp"} = url
+      when is_number(port) and is_binary(host) ->
+        GenServer.start_link(__MODULE__, %{
+          transport: transport,
+          url: url,
+          options: options
+        })
+
+      _ ->
+        {:error, :invalid_url}
+    end
   end
 
   @spec request(pid(), Request.t(), non_neg_integer()) :: {:ok, Response.t()} | {:error, atom()}
@@ -33,7 +38,7 @@ defmodule Membrane.RTSP.Session.Manager do
   end
 
   @impl true
-  def init(%{transport: transport, url: url, options: options}) do
+  def init(%{url: url, options: options}) do
     auth_type =
       case url do
         %URI{userinfo: nil} -> nil
@@ -42,14 +47,18 @@ defmodule Membrane.RTSP.Session.Manager do
         %URI{userinfo: info} when is_binary(info) -> :basic
       end
 
-    state = %State{
-      transport: transport,
-      uri: url,
-      execution_options: options,
-      auth: auth_type
-    }
+    with {:ok, transport} <- Membrane.RTSP.Transport.TCPSocket.init(url) do
+      state = %State{
+        transport: transport,
+        uri: url,
+        execution_options: options,
+        auth: auth_type
+      }
 
-    {:ok, state}
+      {:ok, state}
+    else
+      {:error, reason} -> {:stop, reason}
+    end
   end
 
   @impl true
@@ -61,6 +70,7 @@ defmodule Membrane.RTSP.Session.Manager do
       state = %State{state | cseq: cseq + 1}
       {:reply, {:ok, parsed_response}, state}
     else
+      {:error, :socket_closed} -> raise("Remote has closed a socket")
       {:error, _} = error -> {:reply, error, state}
     end
   end

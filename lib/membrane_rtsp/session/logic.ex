@@ -42,7 +42,7 @@ defmodule Membrane.RTSP.Manager.Logic do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> transport.module.execute(transport, options)
+    |> transport.module.execute(transport)
   end
 
   def inject_session_header(request, session_id) do
