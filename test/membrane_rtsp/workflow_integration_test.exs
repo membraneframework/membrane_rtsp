@@ -3,7 +3,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
 
   alias Membrane.RTSP
   alias Membrane.RTSP.{Response, Session}
-  alias Membrane.RTSP.Transport.{Fake, TCPSocket}
+  alias Membrane.RTSP.Transport.TCPSocket
 
   describe "RTSP workflow executes" do
     @tag external: true
@@ -17,8 +17,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   end
 
   defp workflow(url, transport, options \\ []) do
-    assert {:ok, supervisor} = RTSP.Supervisor.start_link()
-    assert {:ok, session} = Session.new(supervisor, url, transport, options)
+    assert {:ok, session} = Session.start_link(url, transport, options)
     assert {:ok, %Response{status: 200}} = RTSP.describe(session)
 
     assert {:ok, %Response{status: 200}} =
@@ -33,7 +32,6 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
 
     assert {:ok, %Response{status: 200}} = RTSP.play(session)
     assert {:ok, %Response{status: 200}} = RTSP.teardown(session)
-    assert :ok == Session.close(supervisor, session)
   end
 
   def resolver(request) do

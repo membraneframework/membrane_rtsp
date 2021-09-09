@@ -1,8 +1,7 @@
 defmodule Membrane.RTSP.SessionTest do
   use ExUnit.Case
 
-  alias Membrane.RTSP
-  alias Membrane.RTSP.{Session, Transport}
+  alias Membrane.RTSP.Session
 
   describe "Session" do
     test "start fails if uri is not valid" do

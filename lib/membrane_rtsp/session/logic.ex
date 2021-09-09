@@ -1,5 +1,5 @@
 defmodule Membrane.RTSP.Manager.Logic do
-  alias Membrane.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP.{Request, Response}
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
@@ -18,7 +18,7 @@ defmodule Membrane.RTSP.Manager.Logic do
             nonce: String.t() | nil
           }
     @type t :: %__MODULE__{
-            transport: Transport.t(),
+            transport: any(),
             cseq: non_neg_integer(),
             uri: URI.t(),
             session_id: binary() | nil,
@@ -32,8 +32,7 @@ defmodule Membrane.RTSP.Manager.Logic do
       cseq: cseq,
       transport: transport,
       uri: uri,
-      session_id: session_id,
-      execution_options: options
+      session_id: session_id
     } = state
 
     request

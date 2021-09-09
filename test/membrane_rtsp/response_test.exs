@@ -75,7 +75,7 @@ defmodule Membrane.RTSP.ResponseTest do
                |> Response.parse()
 
       assert headers == [{"CSeq", "3"}, {"Content-Type", "application/text"}]
-      assert body = "v=0"
+      assert String.trim(body) == "v=0"
     end
   end
 end

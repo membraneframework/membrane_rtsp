@@ -2,9 +2,12 @@ defmodule Membrane.RTSP.Session do
   @moduledoc false
   use GenServer
 
-  alias Membrane.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP
+  alias Membrane.RTSP.{Request, Response}
   import Membrane.RTSP.Manager.Logic
   alias Membrane.RTSP.Manager.Logic.State
+
+  @type t() :: pid()
 
   @doc """
   Starts and links session process.
@@ -16,7 +19,7 @@ defmodule Membrane.RTSP.Session do
     * options - a keyword list that shall be passed when executing request over
     transport
   """
-  @spec start_link(Transport.t(), binary(), Keyword.t()) :: GenServer.on_start()
+  @spec start_link(module(), binary(), Keyword.t()) :: GenServer.on_start()
   def start_link(transport \\ Membrane.RTSP.Transport.TCPSocket, url, options \\ []) do
     case URI.parse(url) do
       %URI{port: port, host: host, scheme: "rtsp"} = url
@@ -30,11 +33,6 @@ defmodule Membrane.RTSP.Session do
       _ ->
         {:error, :invalid_url}
     end
-  end
-
-  @spec request(pid(), Request.t(), non_neg_integer()) :: {:ok, Response.t()} | {:error, atom()}
-  def request(session, request, timeout \\ :infinity) do
-    GenServer.call(session, {:execute, request}, timeout)
   end
 
   @impl true
@@ -73,5 +71,11 @@ defmodule Membrane.RTSP.Session do
       {:error, :socket_closed} -> raise("Remote has closed a socket")
       {:error, _} = error -> {:reply, error, state}
     end
+  end
+
+  @spec request(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: Response.result()
+  def request(session, method, headers \\ [], body \\ "", path \\ nil) do
+    request = %Request{method: method, headers: headers, body: body, path: path}
+    GenServer.call(session, {:execute, request})
   end
 end
