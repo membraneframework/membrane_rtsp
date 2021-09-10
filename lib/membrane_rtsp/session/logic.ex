@@ -17,6 +17,7 @@ defmodule Membrane.RTSP.Manager.Logic do
             realm: String.t() | nil,
             nonce: String.t() | nil
           }
+
     @type t :: %__MODULE__{
             transport: any(),
             cseq: non_neg_integer(),
@@ -27,6 +28,7 @@ defmodule Membrane.RTSP.Manager.Logic do
           }
   end
 
+  @spec execute(Request.t(), State.t()) :: {:ok, binary()} | {:error, reason :: any()}
   def execute(request, state) do
     %State{
       cseq: cseq,
@@ -45,6 +47,7 @@ defmodule Membrane.RTSP.Manager.Logic do
     |> transport_module.execute(transport)
   end
 
+  @spec inject_session_header(Request.t(), binary()) :: Request.t()
   def inject_session_header(request, session_id) do
     case session_id do
       nil -> request
@@ -52,6 +55,7 @@ defmodule Membrane.RTSP.Manager.Logic do
     end
   end
 
+  @spec apply_credentials(Request.t(), URI.t(), :basic | {:digest, map()}) :: Request.t()
   def apply_credentials(request, %URI{userinfo: nil}, _auth_options), do: request
 
   def apply_credentials(%Request{headers: headers} = request, uri, auth) do
@@ -59,7 +63,7 @@ defmodule Membrane.RTSP.Manager.Logic do
       {"Authorization", _} ->
         request
 
-      _ ->
+      _else ->
         do_apply_credentials(request, uri, auth)
     end
   end
@@ -74,10 +78,11 @@ defmodule Membrane.RTSP.Manager.Logic do
     Request.with_header(request, "Authorization", encoded)
   end
 
-  defp do_apply_credentials(request, _, _) do
+  defp do_apply_credentials(request, _url, _options) do
     request
   end
 
+  @spec encode_digest(Request.t(), URI.t(), any()) :: String.t()
   def encode_digest(request, %URI{userinfo: userinfo} = uri, options) do
     [username, password] = String.split(userinfo, ":", parts: 2)
     encoded_uri = Request.process_uri(request, uri)
@@ -98,6 +103,7 @@ defmodule Membrane.RTSP.Manager.Logic do
     )
   end
 
+  @spec md5([String.t()]) :: String.t()
   def md5(value) do
     value
     |> Enum.join(":")
@@ -108,6 +114,7 @@ defmodule Membrane.RTSP.Manager.Logic do
 
   # Some responses do not have to return the Session ID
   # If it does return one, it needs to match one stored in the state.
+  @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()} | {:error, reason :: any()}
   def handle_session_id(%Response{} = response, state) do
     with {:ok, session_value} <- Response.get_header(response, "Session") do
       [session_id | _] = String.split(session_value, ";")
@@ -115,7 +122,7 @@ defmodule Membrane.RTSP.Manager.Logic do
       case state do
         %State{session_id: nil} -> {:ok, %State{state | session_id: session_id}}
         %State{session_id: ^session_id} -> {:ok, state}
-        _ -> {:error, :invalid_session_id}
+        _else -> {:error, :invalid_session_id}
       end
     else
       {:error, :no_such_header} -> {:ok, state}
@@ -124,6 +131,7 @@ defmodule Membrane.RTSP.Manager.Logic do
 
   # Checks for the `nonce` and `realm` values in the `WWW-Authenticate` header.
   # if they exist, sets `type` to `{:digest, opts}`
+  @spec detect_authentication_type(Response.t(), State.t()) :: {:ok, State.t()}
   def detect_authentication_type(%Response{} = response, state) do
     with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
       [_, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)

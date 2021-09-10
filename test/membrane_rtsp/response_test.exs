@@ -60,7 +60,7 @@ defmodule Membrane.RTSP.ResponseTest do
       assert_example_parsed(& &1)
     end
 
-    def assert_example_parsed(transformer) do
+    defp assert_example_parsed(transformer) do
       newline_spec = """
       RTSP/1.0 200 OK
       CSeq: 3

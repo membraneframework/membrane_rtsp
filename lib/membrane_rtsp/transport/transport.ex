@@ -1,4 +1,8 @@
 defmodule Membrane.RTSP.Transport do
+  @moduledoc """
+  Behaviour describing Transport Layer for RealTime Streaming Protocol
+  """
+
   @callback init(url :: URI.t(), connection_timeout :: non_neg_integer()) ::
               {:ok, any()} | {:error, any()}
 

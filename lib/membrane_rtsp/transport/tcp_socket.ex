@@ -8,8 +8,8 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     * timeout - time after request will be deemed missing and error shall be
      returned.
   """
-  import Mockery.Macro
   use Membrane.RTSP.Transport
+  import Mockery.Macro
 
   @connection_timeout 1000
 

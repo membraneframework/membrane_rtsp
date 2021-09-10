@@ -2,9 +2,9 @@ defmodule Membrane.RTSP.Session do
   @moduledoc false
   use GenServer
 
+  import Membrane.RTSP.Manager.Logic
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response}
-  import Membrane.RTSP.Manager.Logic
   alias Membrane.RTSP.Manager.Logic.State
 
   @type t() :: pid()
@@ -30,7 +30,7 @@ defmodule Membrane.RTSP.Session do
           options: options
         })
 
-      _ ->
+      _else ->
         {:error, :invalid_url}
     end
   end
