@@ -53,11 +53,11 @@ defmodule Membrane.RTSP.MixProject do
 
   defp deps do
     [
-      {:bunch, "~> 1.0"},
+      {:bunch, "~> 1.3"},
       {:membrane_protocol_sdp, "~> 0.1.0"},
-      {:dialyxir, "~> 1.0.0", only: [:dev], runtime: false},
-      {:mockery, "~> 2.3.0", runtime: false},
-      {:ex_doc, "~> 0.23", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
+      {:mockery, "~> 2.3", runtime: false},
+      {:ex_doc, "~> 0.25", only: :dev, runtime: false},
       {:mix_test_watch, "~> 0.8", only: :dev, runtime: false},
       {:credo, "~> 1.5.6", only: [:dev, :test], runtime: false}
     ]
