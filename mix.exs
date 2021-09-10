@@ -47,8 +47,7 @@ defmodule Membrane.RTSP.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
-      mod: {Membrane.RTSP.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
