@@ -60,7 +60,7 @@ defmodule Membrane.RTSP.MixProject do
       {:mockery, "~> 2.3.0", runtime: false},
       {:ex_doc, "~> 0.23", only: :dev, runtime: false},
       {:mix_test_watch, "~> 0.8", only: :dev, runtime: false},
-      {:credo, "~> 1.0.4", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.5.6", only: [:dev, :test], runtime: false}
     ]
   end
 end

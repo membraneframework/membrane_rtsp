@@ -4,7 +4,7 @@ defmodule Membrane.Support.Factory.SampleOptionsRequest do
 
   @external_resource "test/support/fixtures/options_request.bin"
   @spec raw() :: binary()
-  def raw, do: "test/support/fixtures/options_request.bin" |> File.read!()
+  def raw, do: File.read!(@external_resource)
 
   @spec method() :: binary()
   def method, do: "OPTIONS"

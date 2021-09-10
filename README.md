@@ -77,7 +77,7 @@ implements GenServer behavior.
 
 ## Architecture
 
-`Session` consists of two processes: `Manager` and `Transport`.
+`Session` consists of two processes: `Manager` and `Transport`. Not anymore you little shit.
 
 `Manager` is responsible for tracking `CSeq` header and `SessionId` and
 `Transport` is responsible for transmitting the request and receiving a response.

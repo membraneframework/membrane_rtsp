@@ -36,7 +36,7 @@ defmodule Membrane.RTSP.Session do
   end
 
   @impl true
-  def init(%{url: url, options: options}) do
+  def init(%{url: url, options: options, transport: transport_module}) do
     auth_type =
       case url do
         %URI{userinfo: nil} -> nil
@@ -45,9 +45,10 @@ defmodule Membrane.RTSP.Session do
         %URI{userinfo: info} when is_binary(info) -> :basic
       end
 
-    with {:ok, transport} <- Membrane.RTSP.Transport.TCPSocket.init(url) do
+    with {:ok, transport} <- transport_module.init(url) do
       state = %State{
         transport: transport,
+        transport_module: transport_module,
         uri: url,
         execution_options: options,
         auth: auth_type
@@ -73,9 +74,29 @@ defmodule Membrane.RTSP.Session do
     end
   end
 
+  @impl true
+  # this might be a message for transport layer. Redirect
+  def handle_info(msg, state) do
+    state.transport_module.handle_info(msg, state.transport)
+    |> translate(:transport, state)
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    state.transport_module.close(state.transport)
+  end
+
   @spec request(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: Response.result()
   def request(session, method, headers \\ [], body \\ "", path \\ nil) do
     request = %Request{method: method, headers: headers, body: body, path: path}
     GenServer.call(session, {:execute, request})
+  end
+
+  defp translate({action, new_state}, key, state) do
+    {action, Map.put(state, key, new_state)}
+  end
+
+  defp translate({action, reply, new_state}, key, state) do
+    {action, reply, Map.put(state, key, new_state)}
   end
 end

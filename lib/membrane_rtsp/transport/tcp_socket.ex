@@ -9,9 +9,11 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
      returned.
   """
   import Mockery.Macro
+  use Membrane.RTSP.Transport
 
   @connection_timeout 1000
 
+  @impl true
   def init(%URI{} = connection_info, connection_timeout \\ @connection_timeout) do
     with {:ok, socket} <- open(connection_info, connection_timeout) do
       {:ok, socket}
@@ -29,7 +31,7 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     )
   end
 
-  @spec execute(any(), any()) :: {:ok, binary()} | {:error, atom()}
+  @impl true
   def execute(request, socket) do
     with :ok <- mockable(:gen_tcp).send(socket, request),
          {:ok, data} <- recv() do
@@ -37,6 +39,11 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     else
       {:error, _reason} = error -> error
     end
+  end
+
+  @impl true
+  def handle_info({:tcp_closed, _socket}, state) do
+    {:stop, :socket_closed, state}
   end
 
   defp recv() do

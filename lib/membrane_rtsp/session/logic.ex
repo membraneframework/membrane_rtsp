@@ -4,7 +4,7 @@ defmodule Membrane.RTSP.Manager.Logic do
 
   defmodule State do
     @moduledoc false
-    @enforce_keys [:transport, :uri]
+    @enforce_keys [:transport, :uri, :transport_module]
     defstruct @enforce_keys ++
                 [
                   :session_id,
@@ -31,6 +31,7 @@ defmodule Membrane.RTSP.Manager.Logic do
     %State{
       cseq: cseq,
       transport: transport,
+      transport_module: transport_module,
       uri: uri,
       session_id: session_id
     } = state
@@ -41,7 +42,7 @@ defmodule Membrane.RTSP.Manager.Logic do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> transport.module.execute(transport)
+    |> transport_module.execute(transport)
   end
 
   def inject_session_header(request, session_id) do
