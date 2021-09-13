@@ -1,9 +1,12 @@
 defmodule Membrane.RTSP.Session.Logic do
+  @moduledoc """
+  Logic for RTSP session
+  """
   alias Membrane.RTSP.{Request, Response}
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
-    @moduledoc ""
+    @moduledoc "Struct representing the state of RTSP session"
     @enforce_keys [:transport, :uri, :transport_module]
     defstruct @enforce_keys ++
                 [
@@ -18,12 +21,14 @@ defmodule Membrane.RTSP.Session.Logic do
             nonce: String.t() | nil
           }
 
+    @type auth_t() :: nil | :basic | {:digest, digest_opts()}
+
     @type t :: %__MODULE__{
             transport: any(),
             cseq: non_neg_integer(),
             uri: URI.t(),
             session_id: binary() | nil,
-            auth: nil | :basic | {:digest, digest_opts()},
+            auth: auth_t(),
             execution_options: Keyword.t()
           }
   end
@@ -55,7 +60,7 @@ defmodule Membrane.RTSP.Session.Logic do
     end
   end
 
-  @spec apply_credentials(Request.t(), URI.t(), :basic | {:digest, map()}) :: Request.t()
+  @spec apply_credentials(Request.t(), URI.t(), State.auth_t()) :: Request.t()
   def apply_credentials(request, %URI{userinfo: nil}, _auth_options), do: request
 
   def apply_credentials(%Request{headers: headers} = request, uri, auth) do
@@ -82,7 +87,7 @@ defmodule Membrane.RTSP.Session.Logic do
     request
   end
 
-  @spec encode_digest(Request.t(), URI.t(), any()) :: String.t()
+  @spec encode_digest(Request.t(), URI.t(), State.digest_opts()) :: String.t()
   def encode_digest(request, %URI{userinfo: userinfo} = uri, options) do
     [username, password] = String.split(userinfo, ":", parts: 2)
     encoded_uri = Request.process_uri(request, uri)

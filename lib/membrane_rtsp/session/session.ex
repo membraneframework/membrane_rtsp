@@ -19,8 +19,8 @@ defmodule Membrane.RTSP.Session do
     * options - a keyword list that shall be passed when executing request over
     transport
   """
-  @spec start_link(module(), binary(), Keyword.t()) :: GenServer.on_start()
-  def start_link(transport \\ Membrane.RTSP.Transport.TCPSocket, url, options \\ []) do
+  @spec start_link(binary(), module() | URI.t(), Keyword.t()) :: GenServer.on_start()
+  def start_link(url, transport \\ Membrane.RTSP.Transport.TCPSocket, options \\ []) do
     case URI.parse(url) do
       %URI{port: port, host: host, scheme: "rtsp"} = url
       when is_number(port) and is_binary(host) ->
@@ -33,16 +33,6 @@ defmodule Membrane.RTSP.Session do
       _else ->
         {:error, :invalid_url}
     end
-  end
-
-  @doc """
-  Creates a new session. This function is deprecated and will be removed in the next version.
-  Use `start_link/3` instead.
-  """
-  @spec new(module(), binary(), Keyword.t()) :: GenServer.on_start()
-  @deprecated "Use `start_link/3` instead"
-  def new(transport \\ Membrane.RTSP.Transport.TCPSocket, url, options \\ []) do
-    start_link(transport, url, options)
   end
 
   @impl true
@@ -85,8 +75,13 @@ defmodule Membrane.RTSP.Session do
   end
 
   @impl true
+  def handle_cast(:terminate, %State{} = state) do
+    {:stop, :normal, state}
+  end
+
+  @impl true
   # this might be a message for transport layer. Redirect
-  def handle_info(msg, state) do
+  def handle_info(msg, %State{} = state) do
     state.transport_module.handle_info(msg, state.transport)
     |> translate(:transport, state)
   end
@@ -101,6 +96,9 @@ defmodule Membrane.RTSP.Session do
     request = %Request{method: method, headers: headers, body: body, path: path}
     GenServer.call(session, {:execute, request})
   end
+
+  @spec close(pid()) :: :ok
+  def close(session), do: GenServer.cast(session, :terminate)
 
   defp translate({action, new_state}, key, state) do
     {action, Map.put(state, key, new_state)}

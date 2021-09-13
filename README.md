@@ -25,22 +25,16 @@ end
 
 ## Usage
 
-To use Membrane RTSP client you must first start a session by calling
-either:
+To use Membrane RTSP client you must first start a session:
 
 ```elixir
-alias Membrane.RTSP
-
-# It will exit if Session can't be started
-{:ok, session} = RTSP.Session.start_link("rtsp://domain.name:port/path")
-# OR
-# Requires you to start under Supervision tree providing Supervisor
-{:ok, session} = RTSP.Session.new(supervisor, "rtsp://domain.name:port/path")
+{:ok, session} = Membrane.RTSP.Session.start_link("rtsp://domain.name:port/path")
 ```
 
 Then you can proceed with executing requests:
 
 ```elixir
+alias Membrane.RTSP
 alias Membrane.RTSP.Response
 
 {:ok, %Response{status: 200}} = RTSP.describe(session)
@@ -62,7 +56,7 @@ If you started session without linking it, it is advised to close it manually
 by calling:
 
 ```elixir
-RTSP.close(supervisor, session)
+RTSP.close(session)
 ```
 
 
@@ -70,20 +64,7 @@ RTSP.close(supervisor, session)
 
 To implement custom request execution logic you must implement
 `Membrane.RTSP.Transport` behavior. Then you can pass
-the name of your transport module to `Membrane.RTSP.Session.new/4`.
-
-`Membrane.RTSP.Session.new/4` assumes that the transport module also
-implements GenServer behavior.
-
-## Architecture
-
-`Session` consists of two processes: `Manager` and `Transport`. Not anymore you little shit.
-
-`Manager` is responsible for tracking `CSeq` header and `SessionId` and
-`Transport` is responsible for transmitting the request and receiving a response.
-We don't want `Manager` to die when `Transport` dies and vice versa, so they are
-started together using `Container` which allows starting and stopping them as
-one.
+the name of your transport module to `Membrane.RTSP.Session.start_link/3`.
 
 ## External tests
 

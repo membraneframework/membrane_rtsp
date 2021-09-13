@@ -16,7 +16,7 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
   end
 
   defp integration_test(uri, transport, options \\ []) do
-    {:ok, pid} = Session.start_link(transport, uri, options)
+    {:ok, pid} = Session.start_link(uri, transport, options)
 
     request = %Request{
       method: "DESCRIBE",
