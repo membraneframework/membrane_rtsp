@@ -1,9 +1,9 @@
-defmodule Membrane.RTSP.Manager.Logic do
+defmodule Membrane.RTSP.Session.Logic do
   alias Membrane.RTSP.{Request, Response}
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
-    @moduledoc false
+    @moduledoc ""
     @enforce_keys [:transport, :uri, :transport_module]
     defstruct @enforce_keys ++
                 [

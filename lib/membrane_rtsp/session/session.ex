@@ -1,11 +1,11 @@
 defmodule Membrane.RTSP.Session do
-  @moduledoc false
+  @moduledoc "RTSP Session"
   use GenServer
 
-  import Membrane.RTSP.Manager.Logic
+  import Membrane.RTSP.Session.Logic
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response}
-  alias Membrane.RTSP.Manager.Logic.State
+  alias Membrane.RTSP.Session.Logic.State
 
   @type t() :: pid()
 
@@ -33,6 +33,16 @@ defmodule Membrane.RTSP.Session do
       _else ->
         {:error, :invalid_url}
     end
+  end
+
+  @doc """
+  Creates a new session. This function is deprecated and will be removed in the next version.
+  Use `start_link/3` instead.
+  """
+  @spec new(module(), binary(), Keyword.t()) :: GenServer.on_start()
+  @deprecated "Use `start_link/3` instead"
+  def new(transport \\ Membrane.RTSP.Transport.TCPSocket, url, options \\ []) do
+    start_link(transport, url, options)
   end
 
   @impl true

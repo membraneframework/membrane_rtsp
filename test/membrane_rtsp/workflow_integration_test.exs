@@ -17,7 +17,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   end
 
   defp workflow(url, transport, options \\ []) do
-    assert {:ok, session} = Session.start_link(url, transport, options)
+    assert {:ok, session} = Session.start_link(transport, url, options)
     assert {:ok, %Response{status: 200}} = RTSP.describe(session)
 
     assert {:ok, %Response{status: 200}} =

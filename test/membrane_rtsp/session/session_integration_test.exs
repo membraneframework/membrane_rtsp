@@ -16,7 +16,7 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
   end
 
   defp integration_test(uri, transport, options \\ []) do
-    {:ok, pid} = Session.start_link(uri, transport, options)
+    {:ok, pid} = Session.start_link(transport, uri, options)
 
     request = %Request{
       method: "DESCRIBE",
@@ -24,7 +24,7 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
       body: ""
     }
 
-    assert {:ok, response} = Session.request(pid, request)
+    assert {:ok, response} = Session.request(pid, request.method, request.headers, request.body)
 
     assert %Response{
              body: body,
@@ -35,7 +35,7 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
 
     assert [
              {"CSeq", "0"},
-             {"Server", "Wowza Streaming Engine 4.7.5.01 build21752"},
+             {"Server", _},
              {"Cache-Control", "no-cache"},
              {"Expires", _},
              {"Content-Length", _},
@@ -45,6 +45,12 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
              {"Content-Type", "application/sdp"},
              {"Session", _}
            ] = headers
+
+    assert Enum.find_value(headers, nil, fn
+             {"Server", server} -> server
+             _otherwise -> false
+           end)
+           |> String.starts_with?("Wowza Streaming Engine")
 
     assert %SDP.Session{} = body
   end
