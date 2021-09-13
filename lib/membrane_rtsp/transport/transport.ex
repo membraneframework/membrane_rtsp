@@ -3,14 +3,14 @@ defmodule Membrane.RTSP.Transport do
   Behaviour describing Transport Layer for RealTime Streaming Protocol
   """
 
-  @callback init(url :: URI.t(), connection_timeout :: non_neg_integer()) ::
+  @callback init(url :: URI.t(), options :: Keyword.t()) ::
               {:ok, any()} | {:error, any()}
 
   @callback handle_info(msg :: any(), state :: any()) ::
               {action :: term(), state :: any()}
               | {action :: term(), reply :: any(), state :: any()}
 
-  @callback execute(request :: any(), state :: any()) ::
+  @callback execute(request :: any(), state :: any(), options :: Keyword.t()) ::
               {:ok, reply :: any()} | {:error, reason :: any()}
 
   @callback close(state :: any()) :: :ok
@@ -30,4 +30,8 @@ defmodule Membrane.RTSP.Transport do
       defoverridable close: 1, handle_info: 2
     end
   end
+
+  @spec new(module(), binary() | URI.t(), Keyword.t()) :: {:ok, any()} | {:error, any()}
+  @deprecated "Use init/3 instead. It is not recommended to manually initiate transport"
+  def new(module, url, options \\ []), do: module.init(url, options)
 end

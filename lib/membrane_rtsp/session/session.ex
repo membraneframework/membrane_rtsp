@@ -45,7 +45,7 @@ defmodule Membrane.RTSP.Session do
         %URI{userinfo: info} when is_binary(info) -> :basic
       end
 
-    with {:ok, transport} <- transport_module.init(url) do
+    with {:ok, transport} <- transport_module.init(url, options) do
       state = %State{
         transport: transport,
         transport_module: transport_module,

@@ -14,7 +14,9 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   @connection_timeout 1000
 
   @impl true
-  def init(%URI{} = connection_info, connection_timeout \\ @connection_timeout) do
+  def init(%URI{} = connection_info, options \\ []) do
+    connection_timeout = options[:connection_timeout] || @connection_timeout
+
     with {:ok, socket} <- open(connection_info, connection_timeout) do
       {:ok, socket}
     else
@@ -32,7 +34,7 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   end
 
   @impl true
-  def execute(request, socket) do
+  def execute(request, socket, _options \\ []) do
     with :ok <- mockable(:gen_tcp).send(socket, request),
          {:ok, data} <- recv() do
       {:ok, data}
