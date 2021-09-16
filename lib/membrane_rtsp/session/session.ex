@@ -21,10 +21,19 @@ defmodule Membrane.RTSP.Session do
   """
   @spec start_link(binary(), module() | URI.t(), Keyword.t()) :: GenServer.on_start()
   def start_link(url, transport \\ Membrane.RTSP.Transport.TCPSocket, options \\ []) do
+    do_start(url, transport, options, &GenServer.start_link/2)
+  end
+
+  @spec start(binary(), module() | URI.t(), Keyword.t()) :: GenServer.on_start()
+  def start(url, transport \\ Membrane.RTSP.Transport.TCPSocket, options \\ []) do
+    do_start(url, transport, options, &GenServer.start/2)
+  end
+
+  defp do_start(url, transport, options, start_fun) do
     case URI.parse(url) do
       %URI{port: port, host: host, scheme: "rtsp"} = url
       when is_number(port) and is_binary(host) ->
-        GenServer.start_link(__MODULE__, %{
+        start_fun.(__MODULE__, %{
           transport: transport,
           url: url,
           options: options
