@@ -1,4 +1,4 @@
-defmodule Membrane.RTSP.Session.Logic do
+defmodule Membrane.RTSP.Logic do
   @moduledoc """
   Logic for RTSP session
   """

@@ -28,7 +28,7 @@ end
 To use Membrane RTSP client you must first start a session:
 
 ```elixir
-{:ok, session} = Membrane.RTSP.Session.start_link("rtsp://domain.name:port/path")
+{:ok, session} = Membrane.RTSP.start_link("rtsp://domain.name:port/path")
 ```
 
 Then you can proceed with executing requests:
@@ -64,7 +64,7 @@ RTSP.close(session)
 
 To implement custom request execution logic you must implement
 `Membrane.RTSP.Transport` behavior. Then you can pass
-the name of your transport module to `Membrane.RTSP.Session.start_link/3`.
+the name of your transport module to `Membrane.RTSP.start_link/3`.
 
 ## External tests
 

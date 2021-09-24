@@ -1,8 +1,9 @@
-defmodule Membrane.RTSP.Session.IntegrationTest do
+defmodule Membrane.RTSP.IntegrationTest do
   use ExUnit.Case, async: false
   use Bunch
 
-  alias Membrane.RTSP.{Request, Response, Session}
+  alias Membrane.RTSP
+  alias Membrane.RTSP.{Request, Response}
   alias Membrane.RTSP.Transport.TCPSocket
   alias Membrane.Protocol.SDP
 
@@ -16,7 +17,7 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
   end
 
   defp integration_test(uri, transport, options \\ []) do
-    {:ok, pid} = Session.start_link(uri, transport, options)
+    {:ok, pid} = RTSP.start_link(uri, transport, options)
 
     request = %Request{
       method: "DESCRIBE",
@@ -24,7 +25,7 @@ defmodule Membrane.RTSP.Session.IntegrationTest do
       body: ""
     }
 
-    assert {:ok, response} = Session.request(pid, request.method, request.headers, request.body)
+    assert {:ok, response} = RTSP.request(pid, request.method, request.headers, request.body)
 
     assert %Response{
              body: body,

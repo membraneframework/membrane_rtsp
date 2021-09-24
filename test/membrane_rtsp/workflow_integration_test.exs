@@ -2,7 +2,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   use ExUnit.Case
 
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Response, Session}
+  alias Membrane.RTSP.Response
   alias Membrane.RTSP.Transport.{TCPSocket, Fake}
 
   describe "RTSP workflow executes" do
@@ -21,7 +21,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   end
 
   defp workflow(url, transport, options \\ []) do
-    assert {:ok, session} = Session.start_link(url, transport, options)
+    assert {:ok, session} = RTSP.start_link(url, transport, options)
     assert {:ok, %Response{status: 200}} = RTSP.describe(session)
 
     assert {:ok, %Response{status: 200}} =
@@ -44,7 +44,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   end
 
   defp request_mappings do
-    user_agent = Membrane.RTSP.Session.Logic.user_agent()
+    user_agent = Membrane.RTSP.Logic.user_agent()
 
     [
       {"""

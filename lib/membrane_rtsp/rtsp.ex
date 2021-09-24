@@ -1,11 +1,11 @@
-defmodule Membrane.RTSP.Session do
+defmodule Membrane.RTSP do
   @moduledoc "RTSP Session"
   use GenServer
 
-  import Membrane.RTSP.Session.Logic
+  import Membrane.RTSP.Logic
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response}
-  alias Membrane.RTSP.Session.Logic.State
+  alias Membrane.RTSP.Logic.State
 
   @type t() :: pid()
 
@@ -116,4 +116,43 @@ defmodule Membrane.RTSP.Session do
   defp translate({action, reply, new_state}, key, state) do
     {action, reply, Map.put(state, key, new_state)}
   end
+
+  @type headers :: [{binary(), binary()}]
+
+  @spec describe(t(), headers()) :: Response.result()
+  def describe(session, headers \\ []), do: request(session, "DESCRIBE", headers, "")
+
+  @spec announce(t(), headers(), binary()) :: Response.result()
+  def announce(session, headers \\ [], body \\ ""),
+    do: request(session, "ANNOUNCE", headers, body)
+
+  @spec get_parameter(t(), headers(), binary()) :: Response.result()
+  def get_parameter(session, headers \\ [], body \\ ""),
+    do: request(session, "GET_PARAMETER", headers, body)
+
+  @spec options(t(), headers()) :: Response.result()
+  def options(session, headers \\ []), do: request(session, "OPTIONS", headers)
+
+  @spec pause(t(), headers()) :: Response.result()
+  def pause(session, headers \\ []), do: request(session, "PAUSE", headers)
+
+  @spec play(t(), headers()) :: Response.result()
+  def play(session, headers \\ []) do
+    request(session, "PLAY", headers, "")
+  end
+
+  @spec record(t(), headers()) :: Response.result()
+  def record(session, headers \\ []), do: request(session, "RECORD", headers)
+
+  @spec setup(t(), binary(), headers()) :: Response.result()
+  def setup(session, path, headers \\ []) do
+    request(session, "SETUP", headers, "", path)
+  end
+
+  @spec set_parameter(t(), headers(), binary()) :: Response.result()
+  def set_parameter(session, headers \\ [], body \\ ""),
+    do: request(session, "SET_PARAMETER", headers, body)
+
+  @spec teardown(t(), headers()) :: Response.result()
+  def teardown(session, headers \\ []), do: request(session, "TEARDOWN", headers)
 end
