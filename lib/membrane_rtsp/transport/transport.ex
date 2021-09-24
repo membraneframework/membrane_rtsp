@@ -29,8 +29,6 @@ defmodule Membrane.RTSP.Transport do
 
   @doc """
   Callback used for cleaning up the transport layer when the session is closed.
-
-  It is optional, but unless implemented, transport layer might not be terminated
   """
   @callback close(state :: any()) :: :ok
 
