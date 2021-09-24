@@ -60,7 +60,7 @@ defmodule Membrane.RTSP.ResponseTest do
       assert_example_parsed(& &1)
     end
 
-    def assert_example_parsed(transformer) do
+    defp assert_example_parsed(transformer) do
       newline_spec = """
       RTSP/1.0 200 OK
       CSeq: 3
@@ -75,7 +75,7 @@ defmodule Membrane.RTSP.ResponseTest do
                |> Response.parse()
 
       assert headers == [{"CSeq", "3"}, {"Content-Type", "application/text"}]
-      assert body = "v=0"
+      assert String.trim(body) == "v=0"
     end
   end
 end

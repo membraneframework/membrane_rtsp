@@ -2,14 +2,13 @@ defmodule Membrane.RTSP.Response do
   @moduledoc """
   This module represents a RTSP response.
   """
+  alias Membrane.Protocol.SDP
 
   @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/
   @line_ending ["\r\n", "\r", "\n"]
 
   @enforce_keys [:status, :version]
   defstruct @enforce_keys ++ [headers: [], body: ""]
-
-  alias Membrane.Protocol.SDP
 
   @type t :: %__MODULE__{
           status: non_neg_integer(),
@@ -78,7 +77,7 @@ defmodule Membrane.RTSP.Response do
             {:ok, {response, rest}}
         end
 
-      _ ->
+      _other ->
         {:error, :invalid_start_line}
     end
   end
@@ -89,7 +88,7 @@ defmodule Membrane.RTSP.Response do
     |> Bunch.Enum.try_map(fn header ->
       case String.split(header, ":", parts: 2) do
         [name, " " <> value] -> {:ok, {name, value}}
-        _ -> {:error, {:malformed_header, header}}
+        _else -> {:error, {:malformed_header, header}}
       end
     end)
   end
@@ -101,7 +100,7 @@ defmodule Membrane.RTSP.Response do
           {:ok, result}
         end
 
-      _ ->
+      _else ->
         {:ok, data}
     end
   end

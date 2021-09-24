@@ -1,19 +1,20 @@
-defmodule Membrane.RTSP.SessionManagerTest do
+defmodule Membrane.RTSP.SessionLogicTest do
   use ExUnit.Case
   use Bunch
-
-  alias Membrane.RTSP.{Request, Session.Manager, Transport}
-  alias Membrane.RTSP.Session.Manager.State
-  alias Membrane.RTSP.Transport.Fake
-
   import Mockery
   import Mockery.Assertions
 
+  alias Membrane.RTSP
+  alias Membrane.RTSP.{Request, Transport}
+  alias Membrane.RTSP.Logic.State
+  alias Membrane.RTSP.Transport.Fake
+
   setup_all do
-    transport = Transport.new(Fake, "fake_executor")
+    {:ok, transport} = Transport.new(Fake, "fake_executor")
 
     state = %State{
       transport: transport,
+      transport_module: Fake,
       cseq: 0,
       uri: "rtsp://domain.net:554/vod/mp4:name.mov" |> URI.parse(),
       session_id: "fake_session"
@@ -24,17 +25,17 @@ defmodule Membrane.RTSP.SessionManagerTest do
     [state: state, request: request]
   end
 
-  describe "Session Manager when executing a request" do
+  describe "Session Logic when executing a request" do
     test """
          adds default headers and increments cseq every time a request is \
          resolved successfully\
          """,
          %{state: state, request: request} do
-      mock(Fake, [proxy: 2], fn serialized_request, _ ->
+      mock(Fake, [proxy: 2], fn serialized_request, _options ->
         assert String.contains?(serialized_request, "\r\nUser-Agent")
       end)
 
-      assert {:reply, {:ok, _}, next_state} = Manager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, next_state} = RTSP.handle_call({:execute, request}, nil, state)
 
       assert next_state == %State{state | cseq: state.cseq + 1}
       assert_called(Fake, proxy: 2)
@@ -43,11 +44,11 @@ defmodule Membrane.RTSP.SessionManagerTest do
     test "returns an error if response has different session", %{
       state: state
     } do
-      resolver = fn _ -> {:error, :timeout} end
+      resolver = fn _request -> {:error, :timeout} end
       state = %State{state | execution_options: [resolver: resolver]}
 
       {:reply, {:error, :timeout}, ^state} =
-        Manager.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
+        RTSP.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
     end
 
     test "preserves session_id", %{request: request, state: state} do
@@ -55,14 +56,14 @@ defmodule Membrane.RTSP.SessionManagerTest do
       session_id = "arbitrary_string"
       request = request |> Request.with_header("Session", session_id)
 
-      mock(Fake, [proxy: 2], fn serialized_request, _ ->
+      mock(Fake, [proxy: 2], fn serialized_request, _options ->
         assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
       end)
 
-      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
       assert state.session_id == session_id
-      assert {:reply, {:ok, _}, _} = Manager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, _} = RTSP.handle_call({:execute, request}, nil, state)
       assert_called(Fake, proxy: 2)
     end
 
@@ -70,11 +71,11 @@ defmodule Membrane.RTSP.SessionManagerTest do
       session_id = "arbitrary_string"
       state = %State{state | session_id: session_id}
 
-      mock(Fake, [proxy: 2], fn serialized_request, _ ->
+      mock(Fake, [proxy: 2], fn serialized_request, _options ->
         assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
       end)
 
-      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
     end
 
     test "applies credentials to request if they were provided in the uri", %{
@@ -94,7 +95,7 @@ defmodule Membrane.RTSP.SessionManagerTest do
       parsed_uri = URI.parse("rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov")
       state = %State{state | uri: parsed_uri, auth: :basic}
 
-      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
       assert_called(Fake, proxy: 2)
     end
@@ -112,20 +113,21 @@ defmodule Membrane.RTSP.SessionManagerTest do
       parsed_uri = URI.parse("rtsp://login:password@domain.net:554/vod/mp4:name.mov")
       state = %State{state | uri: parsed_uri}
 
-      assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
       assert_called(Fake, proxy: 2)
     end
   end
 
   test "add digest information in the state", %{state: state, request: request} do
-    resolver = fn _ ->
-      {:ok, "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"realm\", nonce=\"nonce\"\r\n\r\n"}
+    resolver = fn _request ->
+      {:ok,
+       "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"realm\", nonce=\"nonce\"\r\n\r\n"}
     end
 
     state = %State{state | execution_options: [resolver: resolver]}
 
-    assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+    assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
     assert state.auth == {:digest, %{nonce: "nonce", realm: "realm"}}
 
@@ -147,7 +149,7 @@ defmodule Membrane.RTSP.SessionManagerTest do
 
     state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
-    assert {:reply, {:ok, _}, state} = Manager.handle_call({:execute, request}, nil, state)
+    assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
     assert_called(Fake, proxy: 2)
   end

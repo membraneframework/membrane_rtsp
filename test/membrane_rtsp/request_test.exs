@@ -45,7 +45,7 @@ defmodule Membrane.RTSP.RequestTest do
     end
   end
 
-  def assert_rendered_request(request, expected_result, uri_string) do
+  defp assert_rendered_request(request, expected_result, uri_string) do
     uri = uri_string |> URI.parse()
 
     expected_result =

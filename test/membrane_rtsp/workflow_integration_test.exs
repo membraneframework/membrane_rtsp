@@ -2,8 +2,8 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   use ExUnit.Case
 
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Response, Session}
-  alias Membrane.RTSP.Transport.{Fake, TCPSocket}
+  alias Membrane.RTSP.Response
+  alias Membrane.RTSP.Transport.{TCPSocket, Fake}
 
   describe "RTSP workflow executes" do
     @tag external: true
@@ -21,8 +21,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   end
 
   defp workflow(url, transport, options \\ []) do
-    assert {:ok, supervisor} = RTSP.Supervisor.start_link()
-    assert {:ok, session} = Session.new(supervisor, url, transport, options)
+    assert {:ok, session} = RTSP.start_link(url, transport, options)
     assert {:ok, %Response{status: 200}} = RTSP.describe(session)
 
     assert {:ok, %Response{status: 200}} =
@@ -37,21 +36,21 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
 
     assert {:ok, %Response{status: 200}} = RTSP.play(session)
     assert {:ok, %Response{status: 200}} = RTSP.teardown(session)
-    assert :ok == Session.close(supervisor, session)
   end
 
-  def resolver(request) do
+  defp resolver(request) do
     {_request, response} = List.keyfind(request_mappings(), request, 0)
     response
   end
 
   defp request_mappings do
+    user_agent = Membrane.RTSP.Logic.user_agent()
+
     [
       {"""
        DESCRIBE rtsp://domain.net:554/vod/mp4:mobvie.mov RTSP/1.0
-       User-Agent: MembraneRTSP/0.2.0 (Membrane Framework RTSP Client)
-       CSeq: 0
-
+       User-Agent: #{user_agent}
+       CSeq: 0\n
        """
        |> format_rtsp_binary(),
        {:ok,
@@ -85,16 +84,16 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
         a=framerate:24.0
         a=control:trackID=2
         """}},
-      {"SETUP rtsp://domain.net:554/vod/mp4:mobvie.mov/trackID=1 RTSP/1.0\r\nUser-Agent: MembraneRTSP/0.2.0 (Membrane Framework RTSP Client)\r\nCSeq: 1\r\nSession: 369279037\r\nTransport: RTP/AVP;unicast;client_port=57614-57615\r\n\r\n",
+      {"SETUP rtsp://domain.net:554/vod/mp4:mobvie.mov/trackID=1 RTSP/1.0\r\nUser-Agent: #{user_agent}\r\nCSeq: 1\r\nSession: 369279037\r\nTransport: RTP/AVP;unicast;client_port=57614-57615\r\n\r\n",
        {:ok,
         "RTSP/1.0 200 OK\r\nCSeq: 1\r\nServer: Wowza Streaming Engine 4.7.5.01 build21752\r\nCache-Control: no-cache\r\nExpires: Tue, 12 Mar 2019 10:48:38 UTC\r\nTransport: RTP/AVP;unicast;client_port=57614-57615;source=184.72.239.149;server_port=16552-16553;ssrc=63D581FB\r\nDate: Tue, 12 Mar 2019 10:48:38 UTC\r\nSession: 369279037;timeout=60\r\n\r\n"}},
-      {"SETUP rtsp://domain.net:554/vod/mp4:mobvie.mov/trackID=2 RTSP/1.0\r\nUser-Agent: MembraneRTSP/0.2.0 (Membrane Framework RTSP Client)\r\nCSeq: 2\r\nSession: 369279037\r\nTransport: RTP/AVP;unicast;client_port=52614-52615\r\n\r\n",
+      {"SETUP rtsp://domain.net:554/vod/mp4:mobvie.mov/trackID=2 RTSP/1.0\r\nUser-Agent: #{user_agent}\r\nCSeq: 2\r\nSession: 369279037\r\nTransport: RTP/AVP;unicast;client_port=52614-52615\r\n\r\n",
        {:ok,
         "RTSP/1.0 200 OK\r\nCSeq: 2\r\nServer: Wowza Streaming Engine 4.7.5.01 build21752\r\nCache-Control: no-cache\r\nExpires: Tue, 12 Mar 2019 10:48:38 UTC\r\nTransport: RTP/AVP;unicast;client_port=52614-52615;source=184.72.239.149;server_port=16582-16583;ssrc=644708C0\r\nDate: Tue, 12 Mar 2019 10:48:38 UTC\r\nSession: 369279037;timeout=60\r\n\r\n"}},
-      {"PLAY rtsp://domain.net:554/vod/mp4:mobvie.mov RTSP/1.0\r\nUser-Agent: MembraneRTSP/0.2.0 (Membrane Framework RTSP Client)\r\nCSeq: 3\r\nSession: 369279037\r\n\r\n",
+      {"PLAY rtsp://domain.net:554/vod/mp4:mobvie.mov RTSP/1.0\r\nUser-Agent: #{user_agent}\r\nCSeq: 3\r\nSession: 369279037\r\n\r\n",
        {:ok,
         "RTSP/1.0 200 OK\r\nRTP-Info: url=rtsp://domain.net:554/vod/mp4:mobvie.mov/trackID=1;seq=1;rtptime=0,url=rtsp://domain.net:554/vod/mp4:mobvie.mov/trackID=2;seq=1;rtptime=0\r\nCSeq: 3\r\nServer: Wowza Streaming Engine 4.7.5.01 build21752\r\nCache-Control: no-cache\r\nRange: npt=0.0-\r\nSession: 369279037;timeout=60\r\n\r\n"}},
-      {"TEARDOWN rtsp://domain.net:554/vod/mp4:mobvie.mov RTSP/1.0\r\nUser-Agent: MembraneRTSP/0.2.0 (Membrane Framework RTSP Client)\r\nCSeq: 4\r\nSession: 369279037\r\n\r\n",
+      {"TEARDOWN rtsp://domain.net:554/vod/mp4:mobvie.mov RTSP/1.0\r\nUser-Agent: #{user_agent}\r\nCSeq: 4\r\nSession: 369279037\r\n\r\n",
        {:ok,
         "RTSP/1.0 200 OK\r\nCSeq: 4\r\nServer: Wowza Streaming Engine 4.7.5.01 build21752\r\nCache-Control: no-cache\r\nSession: 369279037;timeout=60\r\n\r\n"}}
     ]
