@@ -48,6 +48,9 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     {:stop, :socket_closed, state}
   end
 
+  @impl true
+  def close(_state), do: :ok
+
   defp recv() do
     receive do
       {:tcp, _socket, data} ->

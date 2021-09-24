@@ -77,7 +77,7 @@ defmodule Membrane.RTSP.Response do
             {:ok, {response, rest}}
         end
 
-      _else ->
+      _other ->
         {:error, :invalid_start_line}
     end
   end
