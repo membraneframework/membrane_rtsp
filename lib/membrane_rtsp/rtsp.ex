@@ -3,9 +3,10 @@ defmodule Membrane.RTSP do
   use GenServer
 
   import Membrane.RTSP.Logic
+
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Response}
   alias Membrane.RTSP.Logic.State
+  alias Membrane.RTSP.{Request, Response}
 
   @type t() :: pid()
 
@@ -79,7 +80,7 @@ defmodule Membrane.RTSP do
       {:reply, {:ok, parsed_response}, state}
     else
       {:error, :socket_closed} -> raise("Remote has closed a socket")
-      {:error, _} = error -> {:reply, error, state}
+      {:error, _reason} = error -> {:reply, error, state}
     end
   end
 

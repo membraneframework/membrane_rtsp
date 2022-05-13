@@ -3,7 +3,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
 
   alias Membrane.RTSP
   alias Membrane.RTSP.Response
-  alias Membrane.RTSP.Transport.{TCPSocket, Fake}
+  alias Membrane.RTSP.Transport.{Fake, TCPSocket}
 
   describe "RTSP workflow executes" do
     @tag external: true

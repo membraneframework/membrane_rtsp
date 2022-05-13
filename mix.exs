@@ -11,12 +11,18 @@ defmodule Membrane.RTSP.MixProject do
       elixir: "~> 1.12",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      name: "Membrane RTSP",
+      deps: deps(),
+      dialyzer: dialyzer(),
+
+      # hex
       description: "RTSP client for Elixir",
-      source_url: @github_url,
       package: package(),
-      docs: docs(),
-      deps: deps()
+
+      # docs
+      name: "Membrane RTSP",
+      source_url: @github_url,
+      homepage_url: "https://membraneframework.org",
+      docs: docs()
     ]
   end
 
@@ -24,6 +30,7 @@ defmodule Membrane.RTSP.MixProject do
     [
       main: "readme",
       extras: ["README.md", "LICENSE"],
+      formatters: ["html"],
       source_ref: "v#{@version}",
       nest_modules_by_prefix: [
         Membrane.RTSP
@@ -40,6 +47,19 @@ defmodule Membrane.RTSP.MixProject do
         "Membrane Framework Homepage" => "https://membraneframework.org"
       }
     ]
+  end
+
+  defp dialyzer() do
+    opts = [
+      flags: [:error_handling]
+    ]
+
+    if System.get_env("CI") == "true" do
+      # Store PLTs in cacheable directory for CI
+      [plt_local_path: "priv/plts", plt_core_path: "priv/plts"] ++ opts
+    else
+      opts
+    end
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -59,7 +79,7 @@ defmodule Membrane.RTSP.MixProject do
       {:mockery, "~> 2.3", runtime: false},
       {:ex_doc, "~> 0.25", only: :dev, runtime: false},
       {:mix_test_watch, "~> 0.8", only: :dev, runtime: false},
-      {:credo, "~> 1.5.6", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.6", only: :dev, runtime: false}
     ]
   end
 end
