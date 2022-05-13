@@ -1,8 +1,9 @@
 defmodule Membrane.RTSP.ResponseTest do
   use ExUnit.Case
 
-  alias Membrane.RTSP.Response
   alias Membrane.Protocol.SDP.Session
+  alias Membrane.RTSP.Response
+
   doctest Response
 
   describe "Response parser" do

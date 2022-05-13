@@ -2,10 +2,10 @@ defmodule Membrane.RTSP.IntegrationTest do
   use ExUnit.Case, async: false
   use Bunch
 
+  alias Membrane.Protocol.SDP
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response}
   alias Membrane.RTSP.Transport.TCPSocket
-  alias Membrane.Protocol.SDP
 
   @uri "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov"
 
@@ -36,15 +36,15 @@ defmodule Membrane.RTSP.IntegrationTest do
 
     assert [
              {"CSeq", "0"},
-             {"Server", _},
+             {"Server", _server},
              {"Cache-Control", "no-cache"},
-             {"Expires", _},
-             {"Content-Length", _},
+             {"Expires", _expires},
+             {"Content-Length", _content_length},
              {"Content-Base",
               "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov/"},
-             {"Date", _},
+             {"Date", _date},
              {"Content-Type", "application/sdp"},
-             {"Session", _}
+             {"Session", _session}
            ] = headers
 
     assert Enum.find_value(headers, nil, fn

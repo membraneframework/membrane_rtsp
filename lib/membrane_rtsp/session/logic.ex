@@ -68,7 +68,7 @@ defmodule Membrane.RTSP.Logic do
 
   def apply_credentials(%Request{headers: headers} = request, uri, auth) do
     case List.keyfind(headers, "Authorization", 0) do
-      {"Authorization", _} ->
+      {"Authorization", _value} ->
         request
 
       _else ->
@@ -125,7 +125,7 @@ defmodule Membrane.RTSP.Logic do
   @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()} | {:error, reason :: any()}
   def handle_session_id(%Response{} = response, state) do
     with {:ok, session_value} <- Response.get_header(response, "Session") do
-      [session_id | _] = String.split(session_value, ";")
+      [session_id | _rest] = String.split(session_value, ";")
 
       case state do
         %State{session_id: nil} -> {:ok, %State{state | session_id: session_id}}
@@ -142,13 +142,13 @@ defmodule Membrane.RTSP.Logic do
   @spec detect_authentication_type(Response.t(), State.t()) :: {:ok, State.t()}
   def detect_authentication_type(%Response{} = response, state) do
     with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
-      [_, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
-      [_, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
+      [_match, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
+      [_match, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
       auth_options = {:digest, %{nonce: nonce, realm: realm}}
       {:ok, %{state | auth: auth_options}}
     else
       # non digest auth?
-      {:ok, _} ->
+      {:ok, _non_digest} ->
         {:ok, %{state | auth: :basic}}
 
       {:error, :no_such_header} ->

@@ -14,13 +14,18 @@ defmodule Membrane.RTSP.Transport.Fake do
 
   @spec default_resolver(Membrane.RTSP.Request.t()) :: {:ok, binary()}
   def default_resolver(request) do
-    [_, rest] = String.split(request, "\r\n", parts: 2)
+    [_line, rest] = String.split(request, "\r\n", parts: 2)
     {:ok, @response <> rest}
   end
 
   @impl true
   def init(_url, options \\ []) do
     {:ok, options}
+  end
+
+  @impl true
+  def close(_ref) do
+    :ok
   end
 
   @spec proxy(Membrane.RTSP.Request.t(), any()) :: nil

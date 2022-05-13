@@ -5,12 +5,12 @@ defmodule Membrane.RTSP.SessionLogicTest do
   import Mockery.Assertions
 
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Transport}
   alias Membrane.RTSP.Logic.State
+  alias Membrane.RTSP.Request
   alias Membrane.RTSP.Transport.Fake
 
   setup_all do
-    {:ok, transport} = Transport.new(Fake, "fake_executor")
+    {:ok, transport} = Fake.init("fake_executor")
 
     state = %State{
       transport: transport,
@@ -35,7 +35,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
         assert String.contains?(serialized_request, "\r\nUser-Agent")
       end)
 
-      assert {:reply, {:ok, _}, next_state} = RTSP.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _response}, next_state} =
+               RTSP.handle_call({:execute, request}, nil, state)
 
       assert next_state == %State{state | cseq: state.cseq + 1}
       assert_called(Fake, proxy: 2)
@@ -60,10 +61,13 @@ defmodule Membrane.RTSP.SessionLogicTest do
         assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
       end)
 
-      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
       assert state.session_id == session_id
-      assert {:reply, {:ok, _}, _} = RTSP.handle_call({:execute, request}, nil, state)
+
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
+
       assert_called(Fake, proxy: 2)
     end
 
@@ -75,7 +79,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
         assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
       end)
 
-      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
     end
 
     test "applies credentials to request if they were provided in the uri", %{
@@ -95,7 +100,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
       parsed_uri = URI.parse("rtsp://#{credentials}@domain.net:554/vod/mp4:name.mov")
       state = %State{state | uri: parsed_uri, auth: :basic}
 
-      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
 
       assert_called(Fake, proxy: 2)
     end
@@ -113,7 +119,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
       parsed_uri = URI.parse("rtsp://login:password@domain.net:554/vod/mp4:name.mov")
       state = %State{state | uri: parsed_uri}
 
-      assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
 
       assert_called(Fake, proxy: 2)
     end
@@ -127,7 +134,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     state = %State{state | execution_options: [resolver: resolver]}
 
-    assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
+    assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
     assert state.auth == {:digest, %{nonce: "nonce", realm: "realm"}}
 
@@ -149,7 +156,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
-    assert {:reply, {:ok, _}, state} = RTSP.handle_call({:execute, request}, nil, state)
+    assert {:reply, {:ok, _response}, _state} = RTSP.handle_call({:execute, request}, nil, state)
 
     assert_called(Fake, proxy: 2)
   end

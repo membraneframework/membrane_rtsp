@@ -46,6 +46,6 @@ defmodule Membrane.RTSP.Transport do
   end
 
   @spec new(module(), binary() | URI.t(), Keyword.t()) :: {:ok, any()} | {:error, any()}
-  @deprecated "Use init/3 instead. It is not recommended to manually initiate transport"
+  @deprecated "Use Membrane.RTSP.init/3 instead. It is not recommended to manually initiate transport"
   def new(module, url, options \\ []), do: module.init(url, options)
 end

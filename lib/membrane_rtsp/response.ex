@@ -56,7 +56,7 @@ defmodule Membrane.RTSP.Response do
   @spec get_header(__MODULE__.t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
   def get_header(%__MODULE__{headers: headers}, name) do
     case List.keyfind(headers, name, 0) do
-      {_, value} -> {:ok, value}
+      {_name, value} -> {:ok, value}
       nil -> {:error, :no_such_header}
     end
   end
@@ -67,12 +67,12 @@ defmodule Membrane.RTSP.Response do
     [line, rest] = String.split(binary, @line_ending, parts: 2)
 
     case Regex.run(@start_line_regex, line) do
-      [_, version, code] ->
+      [_match, version, code] ->
         case Integer.parse(code) do
           :error ->
             {:error, :invalid_status_code}
 
-          {code, _} when is_number(code) ->
+          {code, _rest} when is_number(code) ->
             response = %__MODULE__{version: version, status: code}
             {:ok, {response, rest}}
         end
@@ -95,13 +95,8 @@ defmodule Membrane.RTSP.Response do
 
   defp parse_body(data, headers) do
     case List.keyfind(headers, "Content-Type", 0) do
-      {"Content-Type", "application/sdp"} ->
-        with {:ok, result} <- SDP.parse(data) do
-          {:ok, result}
-        end
-
-      _else ->
-        {:ok, data}
+      {"Content-Type", "application/sdp"} -> SDP.parse(data)
+      _other -> {:ok, data}
     end
   end
 end
