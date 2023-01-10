@@ -51,13 +51,16 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   @impl true
   def close(_state), do: :ok
 
-  defp recv() do
+  defp recv(acc \\ <<>>) do
     receive do
       {:tcp, _socket, data} ->
-        {:ok, data}
+        recv(acc <> data)
 
       {:tcp_closed, _socket} ->
         {:error, :connection_closed}
+    after
+      1000 ->
+        {:ok, acc}
     end
   end
 end
