@@ -12,6 +12,7 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   import Mockery.Macro
 
   @connection_timeout 1000
+  @tcp_receive_timeout 100
 
   @impl true
   def init(%URI{} = connection_info, options \\ []) do
@@ -59,7 +60,7 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
       {:tcp_closed, _socket} ->
         {:error, :connection_closed}
     after
-      1000 ->
+      @tcp_receive_timeout ->
         {:ok, acc}
     end
   end
