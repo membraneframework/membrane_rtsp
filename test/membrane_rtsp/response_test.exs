@@ -27,7 +27,7 @@ defmodule Membrane.RTSP.ResponseTest do
                |> String.replace("\n", "\r\n")
                |> Response.parse()
 
-      assert %ExSDP{version: "0"} = body
+      assert %ExSDP{version: 0} = body
       assert headers == [{"CSeq", "3"}, {"Content-Type", "application/sdp"}]
     end
 
