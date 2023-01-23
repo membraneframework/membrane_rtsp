@@ -1,7 +1,6 @@
 defmodule Membrane.RTSP.ResponseTest do
   use ExUnit.Case
 
-  alias Membrane.Protocol.SDP.Session
   alias Membrane.RTSP.Response
 
   doctest Response
@@ -28,7 +27,7 @@ defmodule Membrane.RTSP.ResponseTest do
                |> String.replace("\n", "\r\n")
                |> Response.parse()
 
-      assert %Session{version: "0"} = body
+      assert %ExSDP{version: 0} = body
       assert headers == [{"CSeq", "3"}, {"Content-Type", "application/sdp"}]
     end
 

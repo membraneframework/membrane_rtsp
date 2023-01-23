@@ -2,7 +2,6 @@ defmodule Membrane.RTSP.IntegrationTest do
   use ExUnit.Case, async: false
   use Bunch
 
-  alias Membrane.Protocol.SDP
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response}
   alias Membrane.RTSP.Transport.TCPSocket
@@ -53,6 +52,6 @@ defmodule Membrane.RTSP.IntegrationTest do
            end)
            |> String.starts_with?("Wowza Streaming Engine")
 
-    assert %SDP.Session{} = body
+    assert %ExSDP{} = body
   end
 end

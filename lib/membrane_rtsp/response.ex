@@ -2,7 +2,6 @@ defmodule Membrane.RTSP.Response do
   @moduledoc """
   This module represents a RTSP response.
   """
-  alias Membrane.Protocol.SDP
 
   @start_line_regex ~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/
   @line_ending ["\r\n", "\r", "\n"]
@@ -13,7 +12,7 @@ defmodule Membrane.RTSP.Response do
   @type t :: %__MODULE__{
           status: non_neg_integer(),
           headers: Membrane.RTSP.headers(),
-          body: SDP.Session.t() | binary()
+          body: ExSDP.t() | binary()
         }
 
   @type result :: {:ok, t()} | {:error, atom()}
@@ -95,8 +94,11 @@ defmodule Membrane.RTSP.Response do
 
   defp parse_body(data, headers) do
     case List.keyfind(headers, "Content-Type", 0) do
-      {"Content-Type", "application/sdp"} -> SDP.parse(data)
-      _other -> {:ok, data}
+      {"Content-Type", "application/sdp"} ->
+        ExSDP.parse(data)
+
+      _other ->
+        {:ok, data}
     end
   end
 end
