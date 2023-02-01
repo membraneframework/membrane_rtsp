@@ -79,7 +79,7 @@ defmodule Membrane.RTSP.Request do
     |> Path.relative_to(base_url.path)
     |> then(&Path.join(base_url.path, &1))
     |> then(&Map.put(base_url, :path, &1))
-    |> URI.to_string
+    |> URI.to_string()
   end
 
   defp render_headers([]), do: ""
