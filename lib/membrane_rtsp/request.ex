@@ -68,14 +68,19 @@ defmodule Membrane.RTSP.Request do
   @spec process_uri(t(), URI.t()) :: binary()
   def process_uri(request, uri) do
     %URI{uri | userinfo: nil}
-    |> to_string()
     |> apply_path(request)
   end
 
-  defp apply_path(url, %__MODULE__{path: nil}), do: url
+  defp apply_path(%URI{} = base_url, %__MODULE__{path: nil}), do: base_url
 
-  defp apply_path(url, %__MODULE__{path: path}),
-    do: Path.join(url, path)
+  defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) do
+    URI.parse(path)
+    |> Map.get(:path)
+    |> Path.relative_to(base_url.path)
+    |> then(&Path.join(base_url.path, &1))
+    |> then(&Map.put(base_url, :path, &1))
+    |> URI.to_string
+  end
 
   defp render_headers([]), do: ""
 
