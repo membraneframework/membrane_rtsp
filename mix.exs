@@ -1,7 +1,7 @@
 defmodule Membrane.RTSP.MixProject do
   use Mix.Project
 
-  @version "0.3.2"
+  @version "0.3.3"
   @github_url "https://github.com/membraneframework/membrane_rtsp"
 
   def project do
@@ -73,8 +73,8 @@ defmodule Membrane.RTSP.MixProject do
 
   defp deps do
     [
-      {:bunch, "~> 1.3"},
-      {:ex_sdp, "~> 0.10.1"},
+      {:bunch, "~> 1.6"},
+      {:ex_sdp, "~> 0.10.2"},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mockery, "~> 2.3", runtime: false},
       {:ex_doc, "~> 0.25", only: :dev, runtime: false},
