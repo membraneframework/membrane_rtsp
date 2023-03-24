@@ -57,7 +57,7 @@ defmodule Membrane.RTSP.Response do
   def verify_content_length(response) do
     splittet_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
     headers = Enum.at(splittet_response, 0)
-    body = Enum.at(splittet_response, 0) || ""
+    body = Enum.at(splittet_response, 1) || ""
     body_size = byte_size(body)
 
     with {:ok, {response, headers}} <- parse_start_line(headers),
