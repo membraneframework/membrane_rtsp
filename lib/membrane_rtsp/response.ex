@@ -55,23 +55,27 @@ defmodule Membrane.RTSP.Response do
 
     with {:ok, {response, headers}} <- parse_start_line(headers),
          {:ok, headers} <- parse_headers(headers),
+         false <- is_nil(body),
+         body_size <- byte_size(body),
          {:ok, content_legth_str} <-
            get_header(%__MODULE__{response | headers: headers}, "Content-Length") do
       {content_length, _remainder} = Integer.parse(content_legth_str)
 
-      cond do
-        is_nil(body) ->
-          {:error, 0, 0}
-
-        byte_size(body) == content_length ->
-          {:ok, content_length, byte_size(body)}
-
-        true ->
-          {:error, content_length, body_size}
+      if body_size == content_length do
+        {:ok, content_length, body_size}
+      else
+        {:error, content_length, body_size}
       end
     else
-      {:error, :no_such_header} -> {:ok, 0, body_size}
-      _other -> {:error, 0, body_size}
+      {:error, :no_such_header} ->
+        if byte_size(body) == 0 do
+          {:ok, 0, 0}
+        else
+          {:error, 0, 0}
+        end
+
+      _other ->
+        {:error, 0, 0}
     end
   end
 
