@@ -52,12 +52,12 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   @impl true
   def close(_state), do: :ok
 
-  defp recv(socket) do
-    case do_recv(socket) do
+  defp recv(socket, length \\ 0, acc \\ <<>>) do
+    case do_recv(socket, length, acc) do
       {:ok, data} ->
         case Membrane.RTSP.Response.verify_content_length(data) do
           {:ok, _expected, _received} -> {:ok, data}
-          {:error, expected, received} -> do_recv(socket, expected - received, data)
+          {:error, expected, received} -> recv(socket, expected - received, data)
         end
 
       {:error, reason} ->
