@@ -53,21 +53,22 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   def close(_state), do: :ok
 
   defp recv(socket) do
-    case mockable(:gen_tcp).recv(socket, 0, @tcp_receive_timeout) do
+    case do_recv(socket) do
       {:ok, data} ->
         case Membrane.RTSP.Response.verify_content_length(data) do
-          {:ok, _expected, _received} ->
-            {:ok, data}
-
-          {:error, expected, received} ->
-            case mockable(:gen_tcp).recv(socket, expected - received, @tcp_receive_timeout) do
-              {:ok, next_packet} -> {:ok, data <> next_packet}
-              {:error, reason} -> {:error, reason}
-            end
+          {:ok, _expected, _received} -> {:ok, data}
+          {:error, expected, received} -> do_recv(socket, expected - received, data)
         end
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp do_recv(socket, length \\ 0, acc \\ <<>>) do
+    case mockable(:gen_tcp).recv(socket, length, @tcp_receive_timeout) do
+      {:ok, data} -> {:ok, acc <> data}
+      {:error, reason} -> {:error, reason}
     end
   end
 end
