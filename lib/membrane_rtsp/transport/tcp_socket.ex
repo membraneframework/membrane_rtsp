@@ -65,7 +65,7 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     end
   end
 
-  defp do_recv(socket, length \\ 0, acc \\ <<>>) do
+  defp do_recv(socket, length, acc) do
     case mockable(:gen_tcp).recv(socket, length, @tcp_receive_timeout) do
       {:ok, data} -> {:ok, acc <> data}
       {:error, reason} -> {:error, reason}
