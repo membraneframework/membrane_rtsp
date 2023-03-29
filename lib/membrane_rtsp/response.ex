@@ -49,9 +49,9 @@ defmodule Membrane.RTSP.Response do
           {:ok, non_neg_integer(), non_neg_integer()}
           | {:error, non_neg_integer(), non_neg_integer()}
   def verify_content_length(response) do
-    splittet_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
-    headers = Enum.at(splittet_response, 0)
-    body = Enum.at(splittet_response, 1)
+    split_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
+    headers = Enum.at(split_response, 0)
+    body = Enum.at(split_response, 1)
 
     with {:ok, {response, headers}} <- parse_start_line(headers),
          {:ok, headers} <- parse_headers(headers),
