@@ -35,6 +35,51 @@ defmodule Membrane.RTSP.Response do
   end
 
   @doc """
+  Verifies if raw response binary has got proper length by comparing `Content-Length` header value to actual size of body in response.
+  Returns tuple with verdict, expected size and actual size of body
+
+  Example responses:
+  `{:ok, 512, 512}` - `Content-Length` header value and body size matched. A response is complete.
+  `{:ok, 0, 0}` - `Content-Length` header missing or set to 0 and no body. A response is complete.
+  `{:error, 512, 123}` - Missing part of body in response.
+  `{:error, 512, 0}` - Missing whole body in response.
+  `{:error, 0, 0}` - Missing part of header or missing delimiter at the and of header part.
+  """
+  @spec verify_content_length(binary()) ::
+          {:ok, non_neg_integer(), non_neg_integer()}
+          | {:error, non_neg_integer(), non_neg_integer()}
+  def verify_content_length(response) do
+    split_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
+    headers = Enum.at(split_response, 0)
+    body = Enum.at(split_response, 1)
+
+    with {:ok, {response, headers}} <- parse_start_line(headers),
+         {:ok, headers} <- parse_headers(headers),
+         false <- is_nil(body),
+         body_size <- byte_size(body),
+         {:ok, content_legth_str} <-
+           get_header(%__MODULE__{response | headers: headers}, "Content-Length") do
+      {content_length, _remainder} = Integer.parse(content_legth_str)
+
+      if body_size == content_length do
+        {:ok, content_length, body_size}
+      else
+        {:error, content_length, body_size}
+      end
+    else
+      {:error, :no_such_header} ->
+        if byte_size(body) == 0 do
+          {:ok, 0, 0}
+        else
+          {:error, 0, 0}
+        end
+
+      _other ->
+        {:error, 0, 0}
+    end
+  end
+
+  @doc """
   Retrieves the first header matching given name from a response.
 
   ```
@@ -51,7 +96,6 @@ defmodule Membrane.RTSP.Response do
   ```
 
   """
-
   @spec get_header(__MODULE__.t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
   def get_header(%__MODULE__{headers: headers}, name) do
     case List.keyfind(headers, name, 0) do
