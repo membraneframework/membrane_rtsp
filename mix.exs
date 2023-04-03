@@ -1,7 +1,7 @@
 defmodule Membrane.RTSP.MixProject do
   use Mix.Project
 
-  @version "0.4.0"
+  @version "0.5.0"
   @github_url "https://github.com/membraneframework/membrane_rtsp"
 
   def project do
@@ -21,7 +21,7 @@ defmodule Membrane.RTSP.MixProject do
       # docs
       name: "Membrane RTSP",
       source_url: @github_url,
-      homepage_url: "https://membraneframework.org",
+      homepage_url: "https://membrane.stream",
       docs: docs()
     ]
   end
@@ -44,7 +44,7 @@ defmodule Membrane.RTSP.MixProject do
       licenses: ["Apache 2.0"],
       links: %{
         "GitHub" => @github_url,
-        "Membrane Framework Homepage" => "https://membraneframework.org"
+        "Membrane Framework Homepage" => "https://membrane.stream"
       }
     ]
   end
@@ -74,7 +74,7 @@ defmodule Membrane.RTSP.MixProject do
   defp deps do
     [
       {:bunch, "~> 1.6"},
-      {:ex_sdp, "~> 0.10.2"},
+      {:ex_sdp, "~> 0.11.0"},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mockery, "~> 2.3", runtime: false},
       {:ex_doc, "~> 0.25", only: :dev, runtime: false},
