@@ -84,6 +84,10 @@ defmodule Membrane.RTSP do
     end
   end
 
+  def handle_call(:get_transport, _from, %State{transport: transport} = state) do
+    {:reply, transport, state}
+  end
+
   @impl true
   def handle_cast(:terminate, %State{} = state) do
     {:stop, :normal, state}
@@ -119,6 +123,11 @@ defmodule Membrane.RTSP do
   end
 
   @type headers :: [{binary(), binary()}]
+
+  @spec get_transport(t()) :: any()
+  def get_transport(session) do
+    GenServer.call(session, :get_transport)
+  end
 
   @spec describe(t(), headers()) :: Response.result()
   def describe(session, headers \\ []), do: request(session, "DESCRIBE", headers, "")
