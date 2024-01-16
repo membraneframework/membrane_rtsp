@@ -74,7 +74,7 @@ defmodule Membrane.RTSP.MixProject do
   defp deps do
     [
       {:bunch, "~> 1.6"},
-      {:ex_sdp, "~> 0.13.1"},
+      {:ex_sdp, "~> 0.14.1"},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mockery, "~> 2.3", runtime: false},
       {:ex_doc, "~> 0.25", only: :dev, runtime: false},
