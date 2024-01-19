@@ -36,8 +36,9 @@ defmodule Membrane.RTSP.Logic do
   @spec user_agent() :: binary()
   def user_agent(), do: @user_agent
 
-  @spec execute(Request.t(), State.t()) :: {:ok, binary()} | {:error, reason :: any()}
-  def execute(request, state) do
+  @spec execute(Request.t(), State.t(), boolean()) ::
+          :ok | {:ok, binary()} | {:error, reason :: any()}
+  def execute(request, state, get_reply \\ true) do
     %State{
       cseq: cseq,
       transport: transport,
@@ -52,7 +53,7 @@ defmodule Membrane.RTSP.Logic do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> transport_module.execute(transport, state.execution_options)
+    |> transport_module.execute(transport, state.execution_options, get_reply: get_reply)
   end
 
   @spec inject_session_header(Request.t(), binary()) :: Request.t()

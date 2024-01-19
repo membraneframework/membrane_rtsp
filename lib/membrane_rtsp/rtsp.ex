@@ -72,7 +72,7 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_call({:execute, request}, _from, %State{cseq: cseq} = state) do
-    with {:ok, raw_response} <- execute(request, state),
+    with {:ok, raw_response} <- execute(request, state, true),
          {:ok, parsed_response} <- Response.parse(raw_response),
          {:ok, state} <- handle_session_id(parsed_response, state),
          {:ok, state} <- detect_authentication_type(parsed_response, state) do
@@ -93,6 +93,16 @@ defmodule Membrane.RTSP do
     {:stop, :normal, state}
   end
 
+  def handle_cast({:execute, request}, %State{cseq: cseq} = state) do
+    case execute(request, state, false) do
+      :ok ->
+        {:noreply, %State{state | cseq: cseq + 1}}
+
+      {:error, reason} ->
+        raise "Error: #{reason}"
+    end
+  end
+
   @impl true
   # this might be a message for transport layer. Redirect
   def handle_info(msg, %State{} = state) do
@@ -109,6 +119,12 @@ defmodule Membrane.RTSP do
   def request(session, method, headers \\ [], body \\ "", path \\ nil) do
     request = %Request{method: method, headers: headers, body: body, path: path}
     GenServer.call(session, {:execute, request})
+  end
+
+  @spec cast_request(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: :ok
+  def cast_request(session, method, headers \\ [], body \\ "", path \\ nil) do
+    request = %Request{method: method, headers: headers, body: body, path: path}
+    GenServer.cast(session, {:execute, request})
   end
 
   @spec close(pid()) :: :ok
@@ -138,6 +154,10 @@ defmodule Membrane.RTSP do
 
   @spec get_parameter(t(), headers(), binary()) :: Response.result()
   def get_parameter(session, headers \\ [], body \\ ""),
+    do: request(session, "GET_PARAMETER", headers, body)
+
+  @spec get_parameter_no_reply(t(), headers(), binary()) :: :ok
+  def get_parameter_no_reply(session, headers \\ [], body \\ ""),
     do: request(session, "GET_PARAMETER", headers, body)
 
   @spec options(t(), headers()) :: Response.result()
