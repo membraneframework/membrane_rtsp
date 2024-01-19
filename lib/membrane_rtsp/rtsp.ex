@@ -71,21 +71,18 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_call({:execute, request}, _from, %State{cseq: cseq} = state) do
-    with {:ok, raw_response} <- execute(request, state, true),
-         {:ok, parsed_response} <- Response.parse(raw_response),
-         {:ok, state} <- handle_session_id(parsed_response, state),
-         {:ok, state} <- detect_authentication_type(parsed_response, state) do
-      state = %State{state | cseq: cseq + 1}
-      {:reply, {:ok, parsed_response}, state}
-    else
-      {:error, :socket_closed} -> raise("Remote has closed a socket")
-      {:error, _reason} = error -> {:reply, error, state}
+  def handle_call({:execute, request}, _from, state) do
+    with {:ok, raw_response} <- execute(request, state, true) do
+      handle_response(raw_response, state)
     end
   end
 
   def handle_call(:get_transport, _from, %State{transport: transport} = state) do
     {:reply, transport, state}
+  end
+
+  def handle_call({:handle_response, raw_response}, _from, state) do
+    handle_response(raw_response, state)
   end
 
   @impl true
@@ -145,6 +142,14 @@ defmodule Membrane.RTSP do
     GenServer.call(session, :get_transport)
   end
 
+  @spec get_parameter_no_reply(t(), headers(), binary()) :: :ok
+  def get_parameter_no_reply(session, headers \\ [], body \\ ""),
+    do: cast_request(session, "GET_PARAMETER", headers, body)
+
+  @spec handle_get_parameter_response(t(), binary()) :: Response.result()
+  def handle_get_parameter_response(session, raw_response),
+    do: GenServer.call(session, {:handle_response, raw_response})
+
   @spec describe(t(), headers()) :: Response.result()
   def describe(session, headers \\ []), do: request(session, "DESCRIBE", headers, "")
 
@@ -155,10 +160,6 @@ defmodule Membrane.RTSP do
   @spec get_parameter(t(), headers(), binary()) :: Response.result()
   def get_parameter(session, headers \\ [], body \\ ""),
     do: request(session, "GET_PARAMETER", headers, body)
-
-  @spec get_parameter_no_reply(t(), headers(), binary()) :: :ok
-  def get_parameter_no_reply(session, headers \\ [], body \\ ""),
-    do: cast_request(session, "GET_PARAMETER", headers, body)
 
   @spec options(t(), headers()) :: Response.result()
   def options(session, headers \\ []), do: request(session, "OPTIONS", headers)

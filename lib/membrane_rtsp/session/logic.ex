@@ -78,6 +78,20 @@ defmodule Membrane.RTSP.Logic do
     end
   end
 
+  @spec handle_response(binary(), State.t()) ::
+          {:reply, {:ok, Response.t()} | {:error, any()}, State.t()}
+  def handle_response(raw_response, state) do
+    with {:ok, parsed_response} <- Response.parse(raw_response),
+         {:ok, state} <- handle_session_id(parsed_response, state),
+         {:ok, state} <- detect_authentication_type(parsed_response, state) do
+      state = %State{state | cseq: state.cseq + 1}
+      {:reply, {:ok, parsed_response}, state}
+    else
+      {:error, :socket_closed} -> raise("Remote has closed a socket")
+      {:error, _other} = error -> {:reply, error, state}
+    end
+  end
+
   defp do_apply_credentials(request, %URI{userinfo: info}, :basic) do
     encoded = Base.encode64(info)
     Request.with_header(request, "Authorization", "Basic " <> encoded)
