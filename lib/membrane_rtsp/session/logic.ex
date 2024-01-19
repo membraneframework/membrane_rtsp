@@ -44,7 +44,8 @@ defmodule Membrane.RTSP.Logic do
       transport: transport,
       transport_module: transport_module,
       uri: uri,
-      session_id: session_id
+      session_id: session_id,
+      execution_options: execution_options
     } = state
 
     request
@@ -53,7 +54,7 @@ defmodule Membrane.RTSP.Logic do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> transport_module.execute(transport, state.execution_options, get_reply: get_reply)
+    |> transport_module.execute(transport, execution_options ++ [get_reply: get_reply])
   end
 
   @spec inject_session_header(Request.t(), binary()) :: Request.t()

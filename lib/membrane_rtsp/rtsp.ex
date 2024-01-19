@@ -158,7 +158,7 @@ defmodule Membrane.RTSP do
 
   @spec get_parameter_no_reply(t(), headers(), binary()) :: :ok
   def get_parameter_no_reply(session, headers \\ [], body \\ ""),
-    do: request(session, "GET_PARAMETER", headers, body)
+    do: cast_request(session, "GET_PARAMETER", headers, body)
 
   @spec options(t(), headers()) :: Response.result()
   def options(session, headers \\ []), do: request(session, "OPTIONS", headers)
