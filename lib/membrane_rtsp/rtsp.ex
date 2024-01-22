@@ -118,8 +118,8 @@ defmodule Membrane.RTSP do
     GenServer.call(session, {:execute, request})
   end
 
-  @spec cast_request(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: :ok
-  def cast_request(session, method, headers \\ [], body \\ "", path \\ nil) do
+  @spec request_no_response(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: :ok
+  def request_no_response(session, method, headers \\ [], body \\ "", path \\ nil) do
     request = %Request{method: method, headers: headers, body: body, path: path}
     GenServer.cast(session, {:execute, request})
   end
@@ -142,12 +142,12 @@ defmodule Membrane.RTSP do
     GenServer.call(session, :get_transport)
   end
 
-  @spec get_parameter_no_reply(t(), headers(), binary()) :: :ok
-  def get_parameter_no_reply(session, headers \\ [], body \\ ""),
-    do: cast_request(session, "GET_PARAMETER", headers, body)
+  @spec get_parameter_no_response(t(), headers(), binary()) :: :ok
+  def get_parameter_no_response(session, headers \\ [], body \\ ""),
+    do: request_no_response(session, "GET_PARAMETER", headers, body)
 
-  @spec play_no_reply(t(), headers()) :: :ok
-  def play_no_reply(session, headers \\ []), do: cast_request(session, "PLAY", headers, "")
+  @spec play_no_response(t(), headers()) :: :ok
+  def play_no_response(session, headers \\ []), do: request_no_response(session, "PLAY", headers, "")
 
   @spec handle_response(t(), binary()) :: Response.result()
   def handle_response(session, raw_response),
