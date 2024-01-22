@@ -146,6 +146,9 @@ defmodule Membrane.RTSP do
   def get_parameter_no_reply(session, headers \\ [], body \\ ""),
     do: cast_request(session, "GET_PARAMETER", headers, body)
 
+  @spec play_no_reply(t(), headers()) :: :ok
+  def play_no_reply(session, headers \\ []), do: cast_request(session, "PLAY", headers, "")
+
   @spec handle_response(t(), binary()) :: Response.result()
   def handle_response(session, raw_response),
     do: GenServer.call(session, {:parse_response, raw_response})
@@ -168,17 +171,13 @@ defmodule Membrane.RTSP do
   def pause(session, headers \\ []), do: request(session, "PAUSE", headers)
 
   @spec play(t(), headers()) :: Response.result()
-  def play(session, headers \\ []) do
-    request(session, "PLAY", headers, "")
-  end
+  def play(session, headers \\ []), do: request(session, "PLAY", headers, "")
 
   @spec record(t(), headers()) :: Response.result()
   def record(session, headers \\ []), do: request(session, "RECORD", headers)
 
   @spec setup(t(), binary(), headers()) :: Response.result()
-  def setup(session, path, headers \\ []) do
-    request(session, "SETUP", headers, "", path)
-  end
+  def setup(session, path, headers \\ []), do: request(session, "SETUP", headers, "", path)
 
   @spec set_parameter(t(), headers(), binary()) :: Response.result()
   def set_parameter(session, headers \\ [], body \\ ""),
