@@ -73,7 +73,7 @@ defmodule Membrane.RTSP do
   @impl true
   def handle_call({:execute, request}, _from, state) do
     with {:ok, raw_response} <- execute(request, state, true) do
-      handle_response(raw_response, state)
+      parse_response(raw_response, state)
     end
   end
 
@@ -81,8 +81,8 @@ defmodule Membrane.RTSP do
     {:reply, transport, state}
   end
 
-  def handle_call({:handle_response, raw_response}, _from, state) do
-    handle_response(raw_response, state)
+  def handle_call({:parse_response, raw_response}, _from, state) do
+    parse_response(raw_response, state)
   end
 
   @impl true
@@ -146,9 +146,9 @@ defmodule Membrane.RTSP do
   def get_parameter_no_reply(session, headers \\ [], body \\ ""),
     do: cast_request(session, "GET_PARAMETER", headers, body)
 
-  @spec handle_get_parameter_response(t(), binary()) :: Response.result()
-  def handle_get_parameter_response(session, raw_response),
-    do: GenServer.call(session, {:handle_response, raw_response})
+  @spec handle_response(t(), binary()) :: Response.result()
+  def handle_response(session, raw_response),
+    do: GenServer.call(session, {:parse_response, raw_response})
 
   @spec describe(t(), headers()) :: Response.result()
   def describe(session, headers \\ []), do: request(session, "DESCRIBE", headers, "")

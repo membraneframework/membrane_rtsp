@@ -78,9 +78,9 @@ defmodule Membrane.RTSP.Logic do
     end
   end
 
-  @spec handle_response(binary(), State.t()) ::
+  @spec parse_response(binary(), State.t()) ::
           {:reply, {:ok, Response.t()} | {:error, any()}, State.t()}
-  def handle_response(raw_response, state) do
+  def parse_response(raw_response, state) do
     with {:ok, parsed_response} <- Response.parse(raw_response),
          {:ok, state} <- handle_session_id(parsed_response, state),
          {:ok, state} <- detect_authentication_type(parsed_response, state) do
