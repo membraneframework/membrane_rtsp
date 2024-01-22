@@ -10,6 +10,8 @@ defmodule Membrane.RTSP do
 
   @type t() :: pid()
 
+  @default_rtsp_port 554
+
   @doc """
   Starts and links session process.
 
@@ -32,11 +34,10 @@ defmodule Membrane.RTSP do
 
   defp do_start(url, transport, options, start_fun) do
     case URI.parse(url) do
-      %URI{port: port, host: host, scheme: "rtsp"} = url
-      when is_number(port) and is_binary(host) ->
+      %URI{host: host, scheme: "rtsp"} = url when is_binary(host) ->
         start_fun.(__MODULE__, %{
           transport: transport,
-          url: url,
+          url: %URI{url | port: url.port || @default_rtsp_port},
           options: options
         })
 
