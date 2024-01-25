@@ -35,12 +35,10 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   end
 
   @impl true
-  def execute(request, socket, _options \\ []) do
-    with :ok <- mockable(:gen_tcp).send(socket, request),
-         {:ok, data} <- recv(socket) do
-      {:ok, data}
-    else
-      {:error, _reason} = error -> error
+  def execute(request, socket, get_response: get_response) do
+    case mockable(:gen_tcp).send(socket, request) do
+      :ok -> if get_response, do: recv(socket), else: :ok
+      error -> error
     end
   end
 

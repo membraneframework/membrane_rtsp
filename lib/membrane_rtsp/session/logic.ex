@@ -36,14 +36,16 @@ defmodule Membrane.RTSP.Logic do
   @spec user_agent() :: binary()
   def user_agent(), do: @user_agent
 
-  @spec execute(Request.t(), State.t()) :: {:ok, binary()} | {:error, reason :: any()}
-  def execute(request, state) do
+  @spec execute(Request.t(), State.t(), boolean()) ::
+          :ok | {:ok, binary()} | {:error, reason :: any()}
+  def execute(request, state, get_response \\ true) do
     %State{
       cseq: cseq,
       transport: transport,
       transport_module: transport_module,
       uri: uri,
-      session_id: session_id
+      session_id: session_id,
+      execution_options: execution_options
     } = state
 
     request
@@ -52,7 +54,7 @@ defmodule Membrane.RTSP.Logic do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> transport_module.execute(transport, state.execution_options)
+    |> transport_module.execute(transport, execution_options ++ [get_response: get_response])
   end
 
   @spec inject_session_header(Request.t(), binary()) :: Request.t()
@@ -73,6 +75,20 @@ defmodule Membrane.RTSP.Logic do
 
       _else ->
         do_apply_credentials(request, uri, auth)
+    end
+  end
+
+  @spec parse_response(binary(), State.t()) ::
+          {:reply, {:ok, Response.t()} | {:error, any()}, State.t()}
+  def parse_response(raw_response, state) do
+    with {:ok, parsed_response} <- Response.parse(raw_response),
+         {:ok, state} <- handle_session_id(parsed_response, state),
+         {:ok, state} <- detect_authentication_type(parsed_response, state) do
+      state = %State{state | cseq: state.cseq + 1}
+      {:reply, {:ok, parsed_response}, state}
+    else
+      {:error, :socket_closed} -> raise("Remote has closed a socket")
+      {:error, _other} = error -> {:reply, error, state}
     end
   end
 

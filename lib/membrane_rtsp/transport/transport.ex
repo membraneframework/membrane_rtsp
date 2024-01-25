@@ -25,7 +25,7 @@ defmodule Membrane.RTSP.Transport do
   Callback for executing requests with a given transport layer.
   """
   @callback execute(request :: any(), state :: any(), options :: Keyword.t()) ::
-              {:ok, reply :: any()} | {:error, reason :: any()}
+              :ok | {:ok, reply :: any()} | {:error, reason :: any()}
 
   @doc """
   Callback used for cleaning up the transport layer when the session is closed.
