@@ -61,6 +61,63 @@ defmodule Membrane.RTSP.Request do
   end
 
   @doc """
+  Parse a binary request into RTSP Request struct
+
+  ```
+    iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n")
+    {:ok, %Request{method: "DESCRIBE", path: "rtsp://domain.net:554/path:movie.mov", headers: [], body: nil}}
+
+  ```
+
+  ```
+    iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\nCSeq: 1\\r\\n\\r\\n")
+    {:ok, %Request{method: "DESCRIBE", path: "rtsp://domain.net:554/path:movie.mov", headers: [{"CSeq", "1"}], body: nil}}
+
+  ```
+
+  ```
+    iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\nContent-Length: 11\\r\\nHello World\\r\\n\\r\\n")
+    {:ok, %Request{method: "DESCRIBE", path: "rtsp://domain.net:554/path:movie.mov", headers: [{"Content-Length", "11"}], body: "Hello World"}}
+
+  ```
+
+  ```
+    iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.1\\r\\n\\r\\n")
+    {:error, "expected string \\"RTSP/1.0\\", followed by string \\"\\\\r\\\\n\\""}
+
+  ```
+  """
+  @spec parse(binary()) :: {:ok, t()} | {:error, term()}
+  def parse(request) do
+    with {:ok, args} <- do_parse(request) do
+      {method, uri, headers, body} =
+        case args do
+          [method, uri] -> {method, uri, [], nil}
+          [method, uri, headers] -> {method, uri, headers, nil}
+          [method, uri, headers, body] -> {method, uri, headers, body}
+        end
+
+      {:ok,
+       %__MODULE__{
+         method: method,
+         path: uri,
+         headers: headers,
+         body: body
+       }}
+    end
+  end
+
+  defp do_parse(request) do
+    case Membrane.RTSP.Parser.parse_request(request) do
+      {:ok, args, _rest, _context, _line, _byte_offset} ->
+        {:ok, args}
+
+      {:error, reason, _rest, _context, _line, _byte_offset} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
   Returns the encoded URI as a binary. This is handy for
   digest auth since this value must be encoded as per the digest
   algorithm

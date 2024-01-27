@@ -75,6 +75,7 @@ defmodule Membrane.RTSP.MixProject do
     [
       {:bunch, "~> 1.6"},
       {:ex_sdp, "~> 0.14.1"},
+      {:nimble_parsec, "~> 1.4.0"},
       {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:mockery, "~> 2.3", runtime: false},
       {:ex_doc, "~> 0.25", only: :dev, runtime: false},
