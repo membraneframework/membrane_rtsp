@@ -29,20 +29,20 @@ defmodule Membrane.RTSP.Parser do
 
   request_line =
     parsec(:method)
-    |> ignore(times(string(" "), min: 1))
+    |> ignore(parsec(:space))
     |> utf8_string([{:not, ?\s}], min: 1)
-    |> ignore(times(string(" "), min: 1))
+    |> ignore(parsec(:space))
     |> ignore(string("RTSP/1.0"))
     |> ignore(string("\r\n"))
 
-  headers = parsec(:header) |> times(min: 1) |> post_traverse(:parse_headers)
-  body = utf8_string([{:not, ?\r}], min: 1) |> ignore(string("\r\n"))
+  headers = parsec(:header) |> times(min: 0) |> post_traverse(:parse_headers)
 
   defparsec :parse_request,
             request_line
-            |> times(headers, min: 0)
-            |> optional(body)
+            |> optional(headers)
             |> ignore(string("\r\n"))
+            |> optional(utf8_string([], min: 1))
+            |> eos()
 
   defp parse_headers(rest, args, context, _line, _offset) do
     headers =

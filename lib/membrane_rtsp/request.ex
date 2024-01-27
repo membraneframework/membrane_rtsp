@@ -27,6 +27,30 @@ defmodule Membrane.RTSP.Request do
       do: %__MODULE__{request | headers: [{name, value} | headers]}
 
   @doc """
+  Retrieves the first header matching given name from a request.
+
+  ```
+    iex> request = %Request{
+    ...>   method: "OPTIONS",
+    ...>   headers: [{"header_name", "header_value"}]
+    ...> }
+    iex> Request.get_header(request, "header_name")
+    {:ok, "header_value"}
+    iex> Request.get_header(request, "non_existent_header")
+    {:error, :no_such_header}
+
+  ```
+
+  """
+  @spec get_header(t(), binary()) :: {:ok, binary()} | {:error, :no_such_header}
+  def get_header(%__MODULE__{headers: headers}, header) do
+    case List.keyfind(headers, header, 0) do
+      {_name, value} -> {:ok, value}
+      nil -> {:error, :no_such_header}
+    end
+  end
+
+  @doc """
   Renders the a RTSP request struct into a binary that is a valid
   RTSP request string that can be transmitted via communication channel.
 
@@ -76,7 +100,7 @@ defmodule Membrane.RTSP.Request do
   ```
 
   ```
-    iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\nContent-Length: 11\\r\\nHello World\\r\\n\\r\\n")
+    iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\nContent-Length: 11\\r\\n\\r\\nHello World")
     {:ok, %Request{method: "DESCRIBE", path: "rtsp://domain.net:554/path:movie.mov", headers: [{"Content-Length", "11"}], body: "Hello World"}}
 
   ```
