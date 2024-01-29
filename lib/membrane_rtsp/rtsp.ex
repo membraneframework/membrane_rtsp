@@ -148,7 +148,8 @@ defmodule Membrane.RTSP do
     do: request_no_response(session, "GET_PARAMETER", headers, body)
 
   @spec play_no_response(t(), headers()) :: :ok
-  def play_no_response(session, headers \\ []), do: request_no_response(session, "PLAY", headers, "")
+  def play_no_response(session, headers \\ []),
+    do: request_no_response(session, "PLAY", headers, "")
 
   @spec handle_response(t(), binary()) :: Response.result()
   def handle_response(session, raw_response),

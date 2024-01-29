@@ -12,6 +12,14 @@ defmodule Membrane.RTSP.Request do
           path: nil | binary()
         }
 
+  @type transport_header :: [
+          transport: :TCP | :UDP,
+          mode: :unicast | :multicast,
+          parameters: map()
+        ]
+
+  alias Membrane.RTSP.Parser
+
   @doc """
   Attaches a header to a RTSP request struct.
 
@@ -91,23 +99,14 @@ defmodule Membrane.RTSP.Request do
     iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n")
     {:ok, %Request{method: "DESCRIBE", path: "rtsp://domain.net:554/path:movie.mov", headers: [], body: nil}}
 
-  ```
-
-  ```
     iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\nCSeq: 1\\r\\n\\r\\n")
     {:ok, %Request{method: "DESCRIBE", path: "rtsp://domain.net:554/path:movie.mov", headers: [{"CSeq", "1"}], body: nil}}
 
-  ```
-
-  ```
     iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\nContent-Length: 11\\r\\n\\r\\nHello World")
     {:ok, %Request{method: "DESCRIBE", path: "rtsp://domain.net:554/path:movie.mov", headers: [{"Content-Length", "11"}], body: "Hello World"}}
 
-  ```
-
-  ```
     iex> Request.parse("DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.1\\r\\n\\r\\n")
-    {:error, "expected string \\"RTSP/1.0\\", followed by string \\"\\\\r\\\\n\\""}
+    {:error, "expected string \\"RTSP/1.0\\""}
 
   ```
   """
@@ -138,6 +137,60 @@ defmodule Membrane.RTSP.Request do
 
       {:error, reason, _rest, _context, _line, _byte_offset} ->
         {:error, reason}
+    end
+  end
+
+  @doc """
+  Parse the Transport header.
+
+  ```
+    iex> req = %Request{method: "SETUP", headers: [{"Transport", "RTP/AVP;unicast;client_port=30001-30002"}]}
+    iex> Request.parse_transport_header(req)
+    {:ok, [transport: :UDP, mode: :unicast, parameters: %{"client_port" => {30001, 30002}}]}
+
+    iex> req = %Request{method: "SETUP", headers: [{"Transport", "RTP/AVP/TCP;unicast;interleaved=0-1"}]}
+    iex> Request.parse_transport_header(req)
+    {:ok, [transport: :TCP, mode: :unicast, parameters: %{"interleaved" => {0, 1}}]}
+
+    iex> req = %Request{method: "SETUP", headers: [{"Transport", "RTP/AVP"}]}
+    iex> Request.parse_transport_header(req)
+    {:error, :invalid_header}
+
+    iex> Request.parse_transport_header(%Request{method: "SETUP"})
+    {:error, :no_such_header}
+
+  ```
+  """
+  @spec parse_transport_header(t()) ::
+          {:ok, transport_header()} | {:error, :no_such_header | :invalid_header}
+  def parse_transport_header(request) do
+    with {:ok, value} <- get_header(request, "Transport"),
+         {:ok, args} <- do_parse_transport_header(value) do
+      {transport, mode, parameters} =
+        case args do
+          [transport, mode | parameters] when transport in ["UDP", "TCP"] ->
+            {transport, mode, parameters}
+
+          [mode | parameters] ->
+            {"UDP", mode, parameters}
+        end
+
+      {:ok,
+       [
+         transport: String.to_atom(transport),
+         mode: String.to_atom(mode),
+         parameters: Map.new(parameters)
+       ]}
+    end
+  end
+
+  defp do_parse_transport_header(header_value) do
+    case Parser.parse_transport_header(header_value) do
+      {:ok, args, _rest, _context, _line, _byte_offset} ->
+        {:ok, args}
+
+      {:error, _reason, _rest, _context, _line, _byte_offset} ->
+        {:error, :invalid_header}
     end
   end
 
