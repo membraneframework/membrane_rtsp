@@ -21,7 +21,7 @@ defmodule Membrane.RTSP.Server.Conn do
     state = %State{
       socket: config.socket,
       request_handler: config.handler,
-      request_handler_state: config.handler.init()
+      request_handler_state: config.handler.handle_open_connection(config.socket)
     }
 
     {:ok, state, {:continue, :process_client_requests}}

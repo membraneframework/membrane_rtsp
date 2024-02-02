@@ -30,7 +30,7 @@ defmodule Membrane.RTSP.Parser do
     alpha_num
     |> ignore(string(":"))
     |> concat(ignored_space)
-    |> utf8_string([{:not, ?\r}], min: 1)
+    |> utf8_string([{:not, ?\r}, {:not, ?\n}], min: 1)
     |> concat(ignored_delimeter)
 
   request_line =

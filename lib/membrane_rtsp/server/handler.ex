@@ -1,65 +1,74 @@
 defmodule Membrane.RTSP.Server.Handler do
   @moduledoc """
-  Behaviour describing client request handling for Real Time Streaming Protocol
+  Behaviour describing client request handling for Real Time Streaming Protocol.
   """
 
-  alias Membrane.RTSP.Request
+  alias Membrane.RTSP.{Request, Response}
+
+  @typep control_path :: binary()
 
   @type state :: term()
-  @type ssrc :: integer() | binary()
+  @type ssrc :: integer()
+  @type conn :: :inet.socket()
+  @type request :: Request.t()
+
+  @typedoc """
+  A type representing the setupped tracks.
+
+  The type is a map from a control path to the setup details. Each track contains the
+  following information:
+    * `ssrc` - The synchronisation source to use in the `RTP` packets.
+    * `transport` - The transport used for carrying the media packets.
+    * `socket` - An opened socket to use to send `RTP` media packets.
+    * `rtcp_socket` - An opened socket to use to send `RTCP` packets. Available only when transport is `UDP`.
+    * `client_port` - A pair of ports to use to send `RTP` and `RTCP` packets respectively. Available only when transport is `UDP`
+    * `channels` - A pair of channel numbers to use to mux `RTP` and `RTCP` packets. Available only when transport is `TCP`
+
+  """
+  @type setupped_tracks :: %{
+          control_path() => %{
+            :ssrc => binary(),
+            :transport => :UDP | :TCP,
+            :socket => conn(),
+            optional(:rtcp_socket) => conn(),
+            optional(:client_port) => {:inet.port_number(), :inet.port_number()},
+            optional(:channels) => {non_neg_integer(), non_neg_integer()}
+          }
+        }
 
   @doc """
-  Callback for initializing state.
+  Callback called when a new connection is established.
 
-  The state will be passed on the subsequent callbacks as the first argument
+  The returned value is used as a state and is passed as the last argument to
+  the subsequent callbacks
   """
-  @callback init() :: state()
+  @callback handle_open_connection(conn()) :: state()
 
   @doc """
-  Callback for handling OPTIONS client request.
+  Callback called when receiving a DESCRIBE request.
 
-  The result of this callback is ignored.
+  The return value is the response to be sent back to the client. The implementing
+  module need at least set the status of the response.
   """
-  @callback handle_options(state(), Request.t()) :: state()
+  @callback handle_describe(state(), request()) :: {Response.t(), state()}
 
   @doc """
-  Callback for handling DESCRIBE client request.
+  Callback called when receiving a SETUP request.
 
-  `{return_value, new_state}` is the result from calling this callback, the `new_state` will be sent to the subsequent callbacks and
-  the `return_value` is used by the server to set the right status code:
-    - `{:ok, sdp or binary}` - The server will send a 200 status code with the returned binary or SDP as the body.
-    - `{:error, :unauthorized}` - The server will send a 401 status code.
-    - `{:error, :forbidden}` - The server will send a 403 status code.
-    - `{:error, :not_found}` - The server will send a 404 status code.
-    - `{:error, other}` - The server will send a 400 status code.
+  The handler should check for the validity of the requested track (`path` field of the `Request` struct).
   """
-  @callback handle_describe(state(), Request.t()) ::
-              {{:ok, ExSDP.t() | binary()}, state()} | {{:error, term()}, state()}
+  @callback handle_setup(request(), state()) :: {Response.t(), state()}
 
   @doc """
-  Callback for handling SETUP client request.
+  Callback called when receiving a PLAY request.
 
-  The handler is responsible for checking the validity of the requested URI (`path` field of the `Request` struct )
-  and return an error in case the same URI is setup more than once.
-
-  It should return the `ssrc` that'll be used in the RTP paylad. The server will set the proper status code
-  depending on the response. Check `handle_describe` for details.
+  `setupped_tracks` contains the needed information to start sending media packets.
+  Refer to the type documentation for more details
   """
-  @callback handle_setup(state(), Request.t()) ::
-              {{:ok, ssrc}, state()} | {{:error, term()}, state()}
+  @callback handle_play(state(), setupped_tracks()) :: {Response.t(), state()}
 
   @doc """
-  Callback for handling PLAY client request.
-
-  The implementer should start sending media data to the client. Since the
-  client will use the same connection as the RTSP session, a `socket` will passed
-  as a second argument to this callback. Be careful to not to try reading from the
-  socket as this may cause issues with the RTSP session.
+  Callback called when receiving TEARDOWN request.
   """
-  @callback handle_play(state(), :inet.socket()) :: {:ok, state()} | {{:error, term()}, state()}
-
-  @doc """
-  Callback for handling TEARDOWN client request.
-  """
-  @callback handle_teardown(state()) :: :ok
+  @callback handle_teardown(state()) :: {Response.t(), state()}
 end

@@ -156,12 +156,29 @@ defmodule Membrane.RTSP.Response do
   ```
 
   """
-  @spec get_header(__MODULE__.t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
+  @spec get_header(t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
   def get_header(%__MODULE__{headers: headers}, name) do
     case List.keyfind(headers, name, 0) do
       {_name, value} -> {:ok, value}
       nil -> {:error, :no_such_header}
     end
+  end
+
+  @doc """
+  Returns true if the response is an OK
+
+  ```
+    iex> Response.ok?(Response.new(204))
+    true
+
+    iex> Response.ok?(Response.new(400))
+    false
+
+  ```
+  """
+  @spec ok?(t()) :: boolean()
+  def ok?(%__MODULE__{status: status}) do
+    div(status, 100) == 2
   end
 
   @spec parse_start_line(raw_response :: binary()) ::

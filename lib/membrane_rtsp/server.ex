@@ -1,6 +1,16 @@
 defmodule Membrane.RTSP.Server do
   @moduledoc """
-  A module representing an RTSP server.
+  Implementation of an RTSP server.
+
+  To start a new server
+  ```
+  {:ok, server} = Membrane.RTSP.Server.start_link(config)
+  ```
+
+  The `start_link/1` accepts a keyword list configuration:
+    - `port` - The port where the server will listen for connections. default to: `554`
+    - `handler` - An implementation of the behaviour `Membrane.RTSP.Server.Handler`. Refer to the module
+    documentation for more details.
   """
 
   use GenServer
@@ -9,20 +19,28 @@ defmodule Membrane.RTSP.Server do
 
   alias __MODULE__
 
-  @spec start_link(non_neg_integer(), module()) :: GenServer.on_start()
-  def start_link(port, handler) do
-    GenServer.start_link(__MODULE__, %{port: port, handler: handler}, name: __MODULE__)
+  @type server_config :: [
+          name: term(),
+          port: non_neg_integer(),
+          handler: module()
+        ]
+
+  @spec start_link(server_config()) :: GenServer.on_start()
+  def start_link(config) do
+    GenServer.start_link(__MODULE__, config, name: config[:name])
   end
 
   @impl true
   def init(config) do
+    port = Keyword.get(config, :port, 554)
+
     {:ok, socket} =
-      :gen_tcp.listen(config.port, [:binary, packet: :line, active: false, reuseaddr: true])
+      :gen_tcp.listen(port, [:binary, packet: :line, active: false, reuseaddr: true])
 
     parent_pid = self()
     Task.start_link(fn -> do_listen(socket, parent_pid) end)
 
-    {:ok, %{socket: socket, conns: [], handler: config.handler}}
+    {:ok, %{socket: socket, conns: [], handler: config[:handler]}}
   end
 
   defp do_listen(socket, parent_pid) do
