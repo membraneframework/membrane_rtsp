@@ -3,7 +3,7 @@ defmodule Membrane.RTSP.Server.Logic do
   Logic for RTSP Server
   """
 
-  require Logger
+  import Mockery.Macro
 
   alias Membrane.RTSP.{Request, Response, Server}
 
@@ -35,7 +35,10 @@ defmodule Membrane.RTSP.Server.Logic do
           }
   end
 
-  @spec process_request(binary(), State.t()) :: {:ok, State.t()} | {:halt, State.t()}
+  @spec allowed_methods() :: [binary()]
+  def allowed_methods(), do: @allowed_methods
+
+  @spec process_request(binary(), State.t()) :: {:ok, State.t()} | {:close, State.t()}
   def process_request(raw_request, %State{} = state) do
     {response, state, halt?} =
       case Request.parse(raw_request) do
@@ -50,9 +53,9 @@ defmodule Membrane.RTSP.Server.Logic do
     response
     |> Response.with_header("Server", @server)
     |> Response.stringify()
-    |> then(&:gen_tcp.send(state.socket, &1))
+    |> then(&mockable(:gen_tcp).send(state.socket, &1))
 
-    if halt?, do: {:halt, state}, else: {:ok, state}
+    if halt?, do: {:close, state}, else: {:ok, state}
   end
 
   defp do_handle_request(%Request{method: method}, state) when method not in @allowed_methods do
@@ -83,52 +86,29 @@ defmodule Membrane.RTSP.Server.Logic do
          {response, request_handler_state} <-
            state.request_handler.handle_setup(request, state.request_handler_state) do
       if Response.ok?(response) do
-        {:ok, transport_header} = Request.get_header(request, "Transport")
-        <<ssrc::32>> = :crypto.strong_rand_bytes(4)
-
-        transport_header =
-          transport_header <> ";ssrc=#{:binary.encode_unsigned(ssrc) |> Base.encode16()}"
-
-        {track_config, transport_header} =
-          case transport_opts[:transport] do
-            :TCP ->
-              config =
-                %{
-                  socket: state.socket,
-                  channels: transport_opts[:parameters]["interleaved"]
-                }
-
-              {config, transport_header}
-
-            :UDP ->
-              config =
-                %{
-                  socket: state.rtp_socket,
-                  rtcp_socket: state.rtcp_socket,
-                  client_port: transport_opts[:parameters]["client_port"]
-                }
-
-              {config,
-               transport_header <>
-                 ";server_port=#{:inet.port(state.rtp_socket)}-#{:inet.port(state.rtcp_port)}"}
-          end
-
-        track_config =
-          Map.merge(track_config, %{ssrc: ssrc, transport: transport_opts[:transport]})
+        track_config = build_track_config(transport_opts, state)
+        resp_transport_header = build_resp_transport_header(request, track_config)
 
         setupped_tracks = Map.put(state.setupped_tracks, request.path, track_config)
 
-        response
-        |> Response.with_header("Session", state.session_id)
-        |> Response.with_header("Transport", transport_header)
-        |> then(&{&1, %{state | setupped_tracks: setupped_tracks, phase: :setup}})
+        response =
+          response
+          |> Response.with_header("Session", state.session_id)
+          |> Response.with_header("Transport", resp_transport_header)
+
+        {response,
+         %{
+           state
+           | setupped_tracks: setupped_tracks,
+             request_handler_state: request_handler_state,
+             phase: :setup
+         }}
       else
-        response = Response.new(200) |> Response.with_header("Session", state.session_id)
+        response = response |> Response.with_header("Session", state.session_id)
         {response, %{state | request_handler_state: request_handler_state}}
       end
     else
-      {:error, reason} ->
-        Logger.error("error when handling SETUP request: #{inspect(reason)}")
+      _error ->
         {Response.new(400), %{state | request_handler_state: state.request_handler_state}}
     end
   end
@@ -147,7 +127,10 @@ defmodule Membrane.RTSP.Server.Logic do
   end
 
   defp do_handle_request(%Request{method: "TEARDOWN"}, %{phase: :playing} = state) do
-    state.request_handler.handle_teardown(state.request_handler_state)
+    {response, _handler_state} =
+      state.request_handler.handle_teardown(state.request_handler_state)
+
+    response
     |> Response.with_header("Session", state.session_id)
     |> then(&{&1, state})
   end
@@ -162,11 +145,52 @@ defmodule Membrane.RTSP.Server.Logic do
       transport_opts[:mode] == :multicast ->
         {:error, :multicast_not_supported}
 
-      transport_opts[:transport] == :UDP and is_nil(state.rtp_packet) ->
+      transport_opts[:transport] == :UDP and is_nil(state.rtp_socket) ->
         {:error, :udp_not_supported}
 
       true ->
         :ok
+    end
+  end
+
+  defp build_track_config(transport_opts, state) do
+    <<ssrc::32>> = :crypto.strong_rand_bytes(4)
+
+    case transport_opts[:transport] do
+      :TCP ->
+        %{
+          ssrc: ssrc,
+          transport: :TCP,
+          tcp_socket: state.socket,
+          channels: transport_opts[:parameters]["interleaved"]
+        }
+
+      :UDP ->
+        {:ok, {address, _port}} = :inet.peername(state.socket)
+
+        %{
+          ssrc: ssrc,
+          transport: :UDP,
+          rtp_socket: state.rtp_socket,
+          rtcp_socket: state.rtcp_socket,
+          address: address,
+          client_port: transport_opts[:parameters]["client_port"]
+        }
+    end
+  end
+
+  defp build_resp_transport_header(request, track_config) do
+    {:ok, req_header} = Request.get_header(request, "Transport")
+    resp_header = req_header <> ";ssrc=#{Integer.to_string(track_config.ssrc, 16)}"
+
+    case track_config.transport do
+      :TCP ->
+        resp_header
+
+      :UDP ->
+        {:ok, rtp_port} = :inet.port(track_config.rtp_socket)
+        {:ok, rtcp_port} = :inet.port(track_config.rtcp_socket)
+        resp_header <> ";server_port=#{rtp_port}-#{rtcp_port}"
     end
   end
 

@@ -5,9 +5,11 @@ defmodule Membrane.RTSP.Server.Handler do
 
   alias Membrane.RTSP.{Request, Response}
 
-  @typep control_path :: binary()
-
+  @typedoc """
+  Any term that will be used to keep state between the callbacks.
+  """
   @type state :: term()
+  @type control_path :: binary()
   @type ssrc :: integer()
   @type conn :: :inet.socket()
   @type request :: Request.t()
@@ -19,20 +21,24 @@ defmodule Membrane.RTSP.Server.Handler do
   following information:
     * `ssrc` - The synchronisation source to use in the `RTP` packets.
     * `transport` - The transport used for carrying the media packets.
-    * `socket` - An opened socket to use to send `RTP` media packets.
-    * `rtcp_socket` - An opened socket to use to send `RTCP` packets. Available only when transport is `UDP`.
+    * `tcp_socket` - An already open socket to use to send muxed `RTP` and `RTCP` packets. Available only when transport is `TCP`.
+    * `channels` - A pair of channel numbers to include in the `RTP` and `RTCP` packets. Available only when transport is `TCP`
+    * `rtp_socket` - An already open socket to use to send `RTP` packets. Available only when transport is `UDP`.
+    * `rtcp_socket` - An already open socket to use to send `RTCP` packets. Available only when transport is `UDP`.
     * `client_port` - A pair of ports to use to send `RTP` and `RTCP` packets respectively. Available only when transport is `UDP`
-    * `channels` - A pair of channel numbers to use to mux `RTP` and `RTCP` packets. Available only when transport is `TCP`
+    * `address` - An ip address where to send `RTP` and `RTCP` packets. Available only when transport is `UDP`
 
   """
   @type setupped_tracks :: %{
           control_path() => %{
-            :ssrc => binary(),
+            :ssrc => ssrc(),
             :transport => :UDP | :TCP,
-            :socket => conn(),
+            optional(:tcp_socket) => conn(),
+            optional(:channels) => {non_neg_integer(), non_neg_integer()},
+            optional(:rtp_socket) => conn(),
             optional(:rtcp_socket) => conn(),
-            optional(:client_port) => {:inet.port_number(), :inet.port_number()},
-            optional(:channels) => {non_neg_integer(), non_neg_integer()}
+            optional(:address) => :inet.ip_address(),
+            optional(:client_port) => {:inet.port_number(), :inet.port_number()}
           }
         }
 
@@ -65,10 +71,13 @@ defmodule Membrane.RTSP.Server.Handler do
   `setupped_tracks` contains the needed information to start sending media packets.
   Refer to the type documentation for more details
   """
-  @callback handle_play(state(), setupped_tracks()) :: {Response.t(), state()}
+  @callback handle_play(setupped_tracks(), state()) :: {Response.t(), state()}
 
   @doc """
   Callback called when receiving TEARDOWN request.
+
+  The implementer should stop sending media packets and free resources used by
+  the session.
   """
   @callback handle_teardown(state()) :: {Response.t(), state()}
 end

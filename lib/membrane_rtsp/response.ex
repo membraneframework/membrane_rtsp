@@ -68,7 +68,7 @@ defmodule Membrane.RTSP.Response do
   end
 
   @doc """
-  Renders the a RTSP response struct into a binary that is a valid
+  Renders an RTSP response struct into a binary that is a valid
   RTSP response string that can be transmitted via communication channel.
 
   ```

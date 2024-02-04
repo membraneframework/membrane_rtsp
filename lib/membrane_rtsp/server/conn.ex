@@ -11,9 +11,11 @@ defmodule Membrane.RTSP.Server.Conn do
 
   alias Membrane.RTSP.Server.Logic.State
 
-  @spec start(:inet.socket(), module()) :: GenServer.on_start()
-  def start(socket, request_handler) do
-    GenServer.start(__MODULE__, %{socket: socket, handler: request_handler})
+  @max_request_size 1_000_000
+
+  @spec start(map()) :: GenServer.on_start()
+  def start(state) do
+    GenServer.start(__MODULE__, state)
   end
 
   @impl true
@@ -21,7 +23,9 @@ defmodule Membrane.RTSP.Server.Conn do
     state = %State{
       socket: config.socket,
       request_handler: config.handler,
-      request_handler_state: config.handler.handle_open_connection(config.socket)
+      request_handler_state: config.handler.handle_open_connection(config.socket),
+      rtp_socket: config.udp_rtp_socket,
+      rtcp_socket: config.udp_rtcp_socket
     }
 
     {:ok, state, {:continue, :process_client_requests}}
@@ -37,23 +41,17 @@ defmodule Membrane.RTSP.Server.Conn do
     with request when is_binary(request) <- get_request(state.socket),
          {:ok, state} <- process_request(request, state) do
       do_process_client_requests(state)
-    else
-      {:error, reason} ->
-        Logger.error("error while reading client request: #{inspect(reason)}")
-
-      {:halt, _state} ->
-        Logger.info("The client halted the connection")
     end
   end
 
   defp get_request(socket, request \\ "") do
-    case :gen_tcp.recv(socket, 0) do
-      {:ok, packet} ->
-        request = request <> packet
-        if packet != "\r\n", do: get_request(socket, request), else: request
-
-      {:error, reason} ->
-        {:error, reason}
+    with {:ok, packet} <- :gen_tcp.recv(socket, 0),
+         request <- request <> packet,
+         false <- byte_size(request) > @max_request_size do
+      if packet != "\r\n", do: get_request(socket, request), else: request
+    else
+      {:error, reason} -> {:error, reason}
+      true -> {:error, :max_request_size_exceeded}
     end
   end
 end

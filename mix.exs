@@ -32,6 +32,9 @@ defmodule Membrane.RTSP.MixProject do
       extras: ["README.md", "LICENSE"],
       formatters: ["html"],
       source_ref: "v#{@version}",
+      groups_for_modules: [
+        "RTSP Server": [~r/Membrane.RTSP.Server.*/]
+      ],
       nest_modules_by_prefix: [
         Membrane.RTSP
       ]

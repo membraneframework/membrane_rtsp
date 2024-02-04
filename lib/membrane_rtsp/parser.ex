@@ -84,7 +84,7 @@ defmodule Membrane.RTSP.Parser do
             |> optional(ignore(string("/")) |> choice([string("TCP"), string("UDP")]))
             |> ignore(string(";"))
             |> choice([string("unicast"), string("multicast")])
-            |> concat(transport_params)
+            |> optional(transport_params)
             |> eos()
 
   # Private functions
