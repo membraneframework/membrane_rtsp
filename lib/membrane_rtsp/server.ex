@@ -25,6 +25,7 @@ defmodule Membrane.RTSP.Server do
 
   @type server_config :: [
           name: term(),
+          address: :inet.ip_address(),
           port: non_neg_integer(),
           handler: module(),
           udp_rtp_port: :inet.port_number(),
@@ -46,6 +47,7 @@ defmodule Membrane.RTSP.Server do
 
   ### Options
     - `port` - The port where the server will listen for connections. default to: `554`
+    - `address` - Specify the address where the `tcp` and  `udp` sockets will be bind.
     - `handler` - An implementation of the behaviour `Membrane.RTSP.Server.Handler`. Refer to the module
     documentation for more details.
     - `udp_rtp_port` - The port number of the `UDP` socket that will be opened to send `RTP` packets.
@@ -61,10 +63,13 @@ defmodule Membrane.RTSP.Server do
 
   @impl true
   def init(config) do
+    address = config[:address] || :any
+
     {:ok, socket} =
       :gen_tcp.listen(config[:port] || 554, [
         :binary,
         packet: :line,
+        ip: address,
         active: false,
         reuseaddr: true
       ])
@@ -74,8 +79,11 @@ defmodule Membrane.RTSP.Server do
 
     {udp_rtp_socket, udp_rtcp_socket} =
       if udp_rtp_port && udp_rtcp_port do
-        {:ok, udp_rtp_socket} = :gen_udp.open(udp_rtp_port, [:binary, active: false])
-        {:ok, udp_rtcp_socket} = :gen_udp.open(udp_rtcp_port, [:binary, active: false])
+        {:ok, udp_rtp_socket} =
+          :gen_udp.open(udp_rtp_port, [:binary, ip: address, reuseaddr: true, active: false])
+
+        {:ok, udp_rtcp_socket} =
+          :gen_udp.open(udp_rtcp_port, [:binary, ip: address, reuseaddr: true, active: false])
 
         {udp_rtp_socket, udp_rtcp_socket}
       else

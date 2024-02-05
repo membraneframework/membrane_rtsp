@@ -82,13 +82,11 @@ defmodule Membrane.RTSP.ServerLogicTest do
         assert response =~ "\r\nSession: #{state.session_id}\r\n"
       end)
 
-      assert {:ok, state} =
+      assert {:ok, %{session_state: :ready} = state} =
                %Request{method: "SETUP"}
                |> Request.with_header("Transport", "RTP/AVP/TCP;unicast;interleaved=0-1")
                |> Request.stringify(%URI{@url | path: "/stream/trackId=0"})
                |> Logic.process_request(state)
-
-      assert state.phase == :setup
 
       assert %{
                ^control_path => %{
@@ -135,9 +133,9 @@ defmodule Membrane.RTSP.ServerLogicTest do
     end
 
     test "not allowed when playing", %{state: state} do
-      state = %State{state | phase: :playing}
+      state = %State{state | session_state: :playing}
 
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "405" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "455" end)
 
       assert {:ok, ^state} =
                %Request{method: "SETUP"}
@@ -160,7 +158,7 @@ defmodule Membrane.RTSP.ServerLogicTest do
         }
       }
 
-      state = %State{state | phase: :setup, setupped_tracks: setupped_tracks}
+      state = %State{state | session_state: :ready, setupped_tracks: setupped_tracks}
 
       mock(FakeHandler, [respond: 2], fn ^setupped_tracks, state ->
         {Response.new(200), state}
@@ -171,14 +169,14 @@ defmodule Membrane.RTSP.ServerLogicTest do
         assert response =~ "\r\nSession: #{state.session_id}\r\n"
       end)
 
-      assert {:ok, %{phase: :playing}} =
+      assert {:ok, %{session_state: :playing}} =
                %Request{method: "PLAY"}
                |> Request.stringify(uri)
                |> Logic.process_request(state)
     end
 
     test "not allowed before setup", %{state: state} do
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "405" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "455" end)
 
       assert {:ok, ^state} =
                %Request{method: "PLAY"}
@@ -187,16 +185,33 @@ defmodule Membrane.RTSP.ServerLogicTest do
     end
   end
 
-  test "handle TEARDOWN request", %{state: state} do
-    state = %State{state | phase: :playing}
+  describe "handle TEARDOWN request" do
+    test "Re-initialize the session if it's not playing", %{state: state} do
+      state = %State{
+        state
+        | session_state: :ready,
+          setupped_tracks: %{"control_path" => %{ssrc: 112_235}}
+      }
 
-    mock(FakeHandler, [respond: 2], fn nil, state -> {Response.new(200), state} end)
-    mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "200" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "200" end)
 
-    assert {:close, ^state} =
-             %Request{method: "TEARDOWN"}
-             |> Request.stringify(@url)
-             |> Logic.process_request(state)
+      assert {:close, %{session_state: :init, setupped_tracks: %{}}} =
+               %Request{method: "TEARDOWN"}
+               |> Request.stringify(@url)
+               |> Logic.process_request(state)
+    end
+
+    test "free resources", %{state: state} do
+      state = %State{state | session_state: :playing}
+
+      mock(FakeHandler, [respond: 2], fn nil, state -> {Response.new(200), state} end)
+      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "200" end)
+
+      assert {:close, %{session_state: :init, setupped_tracks: %{}}} =
+               %Request{method: "TEARDOWN"}
+               |> Request.stringify(@url)
+               |> Logic.process_request(state)
+    end
   end
 
   test "return 501 (Not Implemented) for not supported methods", %{state: state} do

@@ -74,6 +74,15 @@ defmodule Membrane.RTSP.Server.Handler do
   @callback handle_play(setupped_tracks(), state()) :: {Response.t(), state()}
 
   @doc """
+  Callback called when receiving a PAUSE request.
+
+  Upon receiving a PAUSE request, the server should stop sending media data however
+  the resources are not freed. If the stream cannot be stopped (live view), this callback
+  should return `501` (Not Implemented) response.
+  """
+  @callback handle_pause(state()) :: {Response.t(), state()}
+
+  @doc """
   Callback called when receiving TEARDOWN request.
 
   The implementer should stop sending media packets and free resources used by

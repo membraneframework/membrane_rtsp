@@ -2,6 +2,9 @@ defmodule Membrane.RTSP.Request do
   @moduledoc """
   This module represents a RTSP 1.0 request.
   """
+
+  alias Membrane.RTSP.Parser
+
   @enforce_keys [:method]
   defstruct @enforce_keys ++ [:path, headers: [], body: ""]
 
@@ -17,8 +20,6 @@ defmodule Membrane.RTSP.Request do
           mode: :unicast | :multicast,
           parameters: map()
         ]
-
-  alias Membrane.RTSP.Parser
 
   @doc """
   Attaches a header to a RTSP request struct.

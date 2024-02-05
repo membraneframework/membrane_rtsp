@@ -24,6 +24,11 @@ defmodule Membrane.RTSP.Server.FakeHandler do
   end
 
   @impl true
+  def handle_pause(state) do
+    mockable(__MODULE__).respond(nil, state)
+  end
+
+  @impl true
   def handle_teardown(state) do
     mockable(__MODULE__).respond(nil, state)
   end

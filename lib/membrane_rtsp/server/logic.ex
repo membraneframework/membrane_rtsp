@@ -8,7 +8,7 @@ defmodule Membrane.RTSP.Server.Logic do
   alias Membrane.RTSP.{Request, Response, Server}
 
   @server "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Server)"
-  @allowed_methods ["GET_PARAMETER", "OPTIONS", "DESCRIBE", "SETUP", "PLAY", "TEARDOWN"]
+  @allowed_methods ["GET_PARAMETER", "OPTIONS", "DESCRIBE", "SETUP", "PLAY", "PAUSE", "TEARDOWN"]
 
   defmodule State do
     @moduledoc "Struct representing the state of a server connection"
@@ -20,7 +20,7 @@ defmodule Membrane.RTSP.Server.Logic do
                   :request_handler_state,
                   setupped_tracks: %{},
                   session_id: UUID.uuid4(),
-                  phase: :init
+                  session_state: :init
                 ]
 
     @type t :: %__MODULE__{
@@ -31,7 +31,7 @@ defmodule Membrane.RTSP.Server.Logic do
             request_handler_state: term(),
             setupped_tracks: Server.Handler.setupped_tracks(),
             session_id: binary(),
-            phase: :init | :setup | :playing
+            session_state: :init | :ready | :playing | :paused
           }
   end
 
@@ -80,7 +80,7 @@ defmodule Membrane.RTSP.Server.Logic do
   end
 
   defp do_handle_request(%Request{method: "SETUP"} = request, state)
-       when state.phase != :playing do
+       when state.session_state in [:init, :ready] do
     with {:ok, transport_opts} <- Request.parse_transport_header(request),
          :ok <- validate_transport_parameters(transport_opts, state),
          {response, request_handler_state} <-
@@ -101,7 +101,7 @@ defmodule Membrane.RTSP.Server.Logic do
            state
            | setupped_tracks: setupped_tracks,
              request_handler_state: request_handler_state,
-             phase: :setup
+             session_state: :ready
          }}
       else
         response = response |> Response.with_header("Session", state.session_id)
@@ -113,30 +113,51 @@ defmodule Membrane.RTSP.Server.Logic do
     end
   end
 
-  defp do_handle_request(%Request{method: "PLAY"}, %{phase: :setup} = state) do
+  defp do_handle_request(%Request{method: "PLAY"}, state)
+       when state.session_state in [:ready, :paused] do
     {response, request_handler_state} =
       state.request_handler.handle_play(state.setupped_tracks, state.request_handler_state)
 
     response = response |> Response.with_header("Session", state.session_id)
 
     if Response.ok?(response) do
-      {response, %{state | request_handler_state: request_handler_state, phase: :playing}}
+      {response, %{state | request_handler_state: request_handler_state, session_state: :playing}}
     else
       {response, %{state | request_handler_state: request_handler_state}}
     end
   end
 
-  defp do_handle_request(%Request{method: "TEARDOWN"}, %{phase: :playing} = state) do
+  defp do_handle_request(%Request{method: "PAUSE"}, %{session_state: :playing} = state) do
+    {response, request_handler_state} =
+      state.request_handler.handle_pause(state.request_handler_state)
+
+    response = response |> Response.with_header("Session", state.session_id)
+
+    if Response.ok?(response) do
+      {response, %{state | request_handler_state: request_handler_state, session_state: :paused}}
+    else
+      {response, %{state | request_handler_state: request_handler_state}}
+    end
+  end
+
+  defp do_handle_request(%Request{method: "TEARDOWN"}, state)
+       when state.session_state in [:init, :ready] do
+    Response.new(200)
+    |> Response.with_header("Session", state.session_id)
+    |> then(&{&1, %{state | setupped_tracks: %{}, session_state: :init}})
+  end
+
+  defp do_handle_request(%Request{method: "TEARDOWN"}, state) do
     {response, _handler_state} =
       state.request_handler.handle_teardown(state.request_handler_state)
 
     response
     |> Response.with_header("Session", state.session_id)
-    |> then(&{&1, state})
+    |> then(&{&1, %{state | session_state: :init, setupped_tracks: %{}}})
   end
 
   defp do_handle_request(%Request{}, state) do
-    {Response.new(405), state}
+    {Response.new(455), state}
   end
 
   # TODO: Add more validation for transport parameters
