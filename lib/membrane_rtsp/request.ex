@@ -15,12 +15,6 @@ defmodule Membrane.RTSP.Request do
           path: nil | binary()
         }
 
-  @type transport_header :: [
-          transport: :TCP | :UDP,
-          mode: :unicast | :multicast,
-          parameters: map()
-        ]
-
   @doc """
   Attaches a header to a RTSP request struct.
 
@@ -112,34 +106,7 @@ defmodule Membrane.RTSP.Request do
   ```
   """
   @spec parse(binary()) :: {:ok, t()} | {:error, term()}
-  def parse(request) do
-    with {:ok, args} <- do_parse(request) do
-      {method, uri, headers, body} =
-        case args do
-          [method, uri] -> {method, uri, [], nil}
-          [method, uri, headers] -> {method, uri, headers, nil}
-          [method, uri, headers, body] -> {method, uri, headers, body}
-        end
-
-      {:ok,
-       %__MODULE__{
-         method: method,
-         path: uri,
-         headers: headers,
-         body: body
-       }}
-    end
-  end
-
-  defp do_parse(request) do
-    case Membrane.RTSP.Parser.parse_request(request) do
-      {:ok, args, _rest, _context, _line, _byte_offset} ->
-        {:ok, args}
-
-      {:error, reason, _rest, _context, _line, _byte_offset} ->
-        {:error, reason}
-    end
-  end
+  defdelegate parse(request), to: Parser, as: :parse_request
 
   @doc """
   Parse the Transport header.
@@ -163,35 +130,10 @@ defmodule Membrane.RTSP.Request do
   ```
   """
   @spec parse_transport_header(t()) ::
-          {:ok, transport_header()} | {:error, :no_such_header | :invalid_header}
+          {:ok, Parser.transport_header()} | {:error, :no_such_header | :invalid_header}
   def parse_transport_header(request) do
-    with {:ok, value} <- get_header(request, "Transport"),
-         {:ok, args} <- do_parse_transport_header(value) do
-      {transport, mode, parameters} =
-        case args do
-          [transport, mode | parameters] when transport in ["UDP", "TCP"] ->
-            {transport, mode, parameters}
-
-          [mode | parameters] ->
-            {"UDP", mode, parameters}
-        end
-
-      {:ok,
-       [
-         transport: String.to_atom(transport),
-         mode: String.to_atom(mode),
-         parameters: Map.new(parameters)
-       ]}
-    end
-  end
-
-  defp do_parse_transport_header(header_value) do
-    case Parser.parse_transport_header(header_value) do
-      {:ok, args, _rest, _context, _line, _byte_offset} ->
-        {:ok, args}
-
-      {:error, _reason, _rest, _context, _line, _byte_offset} ->
-        {:error, :invalid_header}
+    with {:ok, value} <- get_header(request, "Transport") do
+      Parser.parse_transport_header(value)
     end
   end
 
