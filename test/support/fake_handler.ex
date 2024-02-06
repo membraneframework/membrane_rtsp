@@ -19,8 +19,8 @@ defmodule Membrane.RTSP.Server.FakeHandler do
   end
 
   @impl true
-  def handle_play(setupped_tracks, state) do
-    mockable(__MODULE__).respond(setupped_tracks, state)
+  def handle_play(configured_media, state) do
+    mockable(__MODULE__).respond(configured_media, state)
   end
 
   @impl true

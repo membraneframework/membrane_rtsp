@@ -37,7 +37,7 @@ defmodule Membrane.RTSP.Response do
       do: %__MODULE__{request | headers: [{name, value} | headers]}
 
   @doc """
-  Add a body to the response and set Content-Length header
+  Adds a body to the response and sets `Content-Length` header
 
   ```
     iex> Response.with_body(Response.new(200), "Hello World")
@@ -165,7 +165,7 @@ defmodule Membrane.RTSP.Response do
   end
 
   @doc """
-  Returns true if the response is an OK
+  Returns true if the response is a success.
 
   ```
     iex> Response.ok?(Response.new(204))

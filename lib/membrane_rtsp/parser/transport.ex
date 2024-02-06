@@ -6,7 +6,7 @@ defmodule Membrane.RTSP.Parser.Transport do
   lower_transport = ignore(string("/")) |> choice([string("TCP"), string("UDP")])
   mode = choice([string("unicast"), string("multicast")])
 
-  param_value = utf8_string([{:not, ?\0..?\s}, {:not, ?;}], min: 1)
+  param_value = utf8_string([{:not, ?\0..?\s}, {:not, ?;}, {:not, ?,}], min: 1)
 
   optional_value_param =
     string("destination")

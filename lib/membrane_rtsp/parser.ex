@@ -35,7 +35,7 @@ defmodule Membrane.RTSP.Parser do
   end
 
   @spec parse_transport_header(binary()) ::
-          {:ok, [transport_header()]} | {:error, :invalid_header}
+          {:ok, transport_header()} | {:error, :invalid_header}
   def parse_transport_header(header) do
     case Transport.parse_transport_header(header) do
       {:ok, args, _rest, _context, _line, _byte_offset} ->
@@ -44,7 +44,7 @@ defmodule Membrane.RTSP.Parser do
             [transport, mode | parameters] when transport in ["UDP", "TCP"] ->
               {transport, mode, parameters}
 
-            [mode | parameters] ->
+            [mode | parameters] when mode in ["unicast", "multicast"] ->
               {"UDP", mode, parameters}
           end
 

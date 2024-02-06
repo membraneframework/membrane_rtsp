@@ -18,7 +18,7 @@ defmodule Membrane.RTSP.Server.Logic do
                   :rtp_socket,
                   :rtcp_socket,
                   :request_handler_state,
-                  setupped_tracks: %{},
+                  configured_media: %{},
                   session_id: UUID.uuid4(),
                   session_state: :init
                 ]
@@ -29,7 +29,7 @@ defmodule Membrane.RTSP.Server.Logic do
             rtcp_socket: :inet.socket() | nil,
             request_handler: module(),
             request_handler_state: term(),
-            setupped_tracks: Server.Handler.setupped_tracks(),
+            configured_media: Server.Handler.configured_media_context(),
             session_id: binary(),
             session_state: :init | :ready | :playing | :paused
           }
@@ -38,16 +38,16 @@ defmodule Membrane.RTSP.Server.Logic do
   @spec allowed_methods() :: [binary()]
   def allowed_methods(), do: @allowed_methods
 
-  @spec process_request(binary(), State.t()) :: {:ok, State.t()} | {:close, State.t()}
+  @spec process_request(binary(), State.t()) :: State.t()
   def process_request(raw_request, %State{} = state) do
-    {response, state, halt?} =
+    {response, state} =
       case Request.parse(raw_request) do
         {:ok, request} ->
           {response, state} = do_handle_request(request, state)
-          {maybe_add_cseq_header(response, request), state, request.method == "TEARDOWN"}
+          {maybe_add_cseq_header(response, request), state}
 
         {:error, _reason} ->
-          {Response.new(400), state, false}
+          {Response.new(400), state}
       end
 
     response
@@ -55,7 +55,7 @@ defmodule Membrane.RTSP.Server.Logic do
     |> Response.stringify()
     |> then(&mockable(:gen_tcp).send(state.socket, &1))
 
-    if halt?, do: {:close, state}, else: {:ok, state}
+    state
   end
 
   defp do_handle_request(%Request{method: method}, state) when method not in @allowed_methods do
@@ -82,31 +82,12 @@ defmodule Membrane.RTSP.Server.Logic do
   defp do_handle_request(%Request{method: "SETUP"} = request, state)
        when state.session_state in [:init, :ready] do
     with {:ok, transport_opts} <- Request.parse_transport_header(request),
-         :ok <- validate_transport_parameters(transport_opts, state),
-         {response, request_handler_state} <-
-           state.request_handler.handle_setup(request, state.request_handler_state) do
-      if Response.ok?(response) do
-        track_config = build_track_config(transport_opts, state)
-        resp_transport_header = build_resp_transport_header(request, track_config)
+         :ok <- validate_transport_parameters(transport_opts, state) do
+      {response, request_handler_state} =
+        state.request_handler.handle_setup(request, state.request_handler_state)
 
-        setupped_tracks = Map.put(state.setupped_tracks, request.path, track_config)
-
-        response =
-          response
-          |> Response.with_header("Session", state.session_id)
-          |> Response.with_header("Transport", resp_transport_header)
-
-        {response,
-         %{
-           state
-           | setupped_tracks: setupped_tracks,
-             request_handler_state: request_handler_state,
-             session_state: :ready
-         }}
-      else
-        response = response |> Response.with_header("Session", state.session_id)
-        {response, %{state | request_handler_state: request_handler_state}}
-      end
+      {response, state} = do_handle_setup_response(request, response, transport_opts, state)
+      {response, %{state | request_handler_state: request_handler_state}}
     else
       _error ->
         {Response.new(400), %{state | request_handler_state: state.request_handler_state}}
@@ -116,7 +97,7 @@ defmodule Membrane.RTSP.Server.Logic do
   defp do_handle_request(%Request{method: "PLAY"}, state)
        when state.session_state in [:ready, :paused] do
     {response, request_handler_state} =
-      state.request_handler.handle_play(state.setupped_tracks, state.request_handler_state)
+      state.request_handler.handle_play(state.configured_media, state.request_handler_state)
 
     response = response |> Response.with_header("Session", state.session_id)
 
@@ -144,7 +125,7 @@ defmodule Membrane.RTSP.Server.Logic do
        when state.session_state in [:init, :ready] do
     Response.new(200)
     |> Response.with_header("Session", state.session_id)
-    |> then(&{&1, %{state | setupped_tracks: %{}, session_state: :init}})
+    |> then(&{&1, %{state | configured_media: %{}, session_state: :init}})
   end
 
   defp do_handle_request(%Request{method: "TEARDOWN"}, state) do
@@ -153,7 +134,7 @@ defmodule Membrane.RTSP.Server.Logic do
 
     response
     |> Response.with_header("Session", state.session_id)
-    |> then(&{&1, %{state | session_state: :init, setupped_tracks: %{}}})
+    |> then(&{&1, %{state | session_state: :init, configured_media: %{}}})
   end
 
   defp do_handle_request(%Request{}, state) do
@@ -171,6 +152,28 @@ defmodule Membrane.RTSP.Server.Logic do
 
       true ->
         :ok
+    end
+  end
+
+  defp do_handle_setup_response(request, response, transport_opts, state) do
+    response = response |> Response.with_header("Session", state.session_id)
+
+    if Response.ok?(response) do
+      track_config = build_track_config(transport_opts, state)
+      resp_transport_header = build_resp_transport_header(request, track_config)
+
+      configured_media = Map.put(state.configured_media, request.path, track_config)
+
+      response = Response.with_header(response, "Transport", resp_transport_header)
+
+      {response,
+       %{
+         state
+         | configured_media: configured_media,
+           session_state: :ready
+       }}
+    else
+      {response, state}
     end
   end
 

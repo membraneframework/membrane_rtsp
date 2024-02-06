@@ -21,12 +21,14 @@ defmodule Membrane.RTSP.Server do
 
   use GenServer
 
-  alias __MODULE__
+  require Logger
+
+  alias __MODULE__.Conn
 
   @type server_config :: [
           name: term(),
           address: :inet.ip_address(),
-          port: non_neg_integer(),
+          port: :inet.port_number(),
           handler: module(),
           udp_rtp_port: :inet.port_number(),
           udp_rtcp_port: :inet.port_number()
@@ -45,16 +47,19 @@ defmodule Membrane.RTSP.Server do
   @doc """
   Start and link an instance of the RTSP server.
 
-  ### Options
-    - `port` - The port where the server will listen for connections. default to: `554`
-    - `address` - Specify the address where the `tcp` and  `udp` sockets will be bind.
+  ## Options
     - `handler` - An implementation of the behaviour `Membrane.RTSP.Server.Handler`. Refer to the module
-    documentation for more details.
+    documentation for more details. This field is required.
+    - `name` - Used for name registration of the server. Defaults to `nil`.
+    - `port` - The port where the server will listen for client connections. Defaults to: `554`
+    - `address` - Specify the address where the `tcp` and `udp` sockets will be bound. Defaults to `:any`.
     - `udp_rtp_port` - The port number of the `UDP` socket that will be opened to send `RTP` packets.
     - `udp_rtcp_port` - The port number of the `UDP` socket that will be opened to send `RTCP` packets.
 
-    Note that `udp_rtp_port` and `udp_rtcp_port` must be both provided, otherwise `UDP` transport is disabled
-    for this server.
+    > #### `Server UDP support` {: .warning}
+    >
+    > Both `udp_rtp_port` and `udp_rtcp_port` must be provided for the server
+    > to support `UDP` transport.
   """
   @spec start_link(server_config()) :: GenServer.on_start()
   def start_link(config) do
@@ -95,24 +100,13 @@ defmodule Membrane.RTSP.Server do
       handler: config[:handler],
       udp_rtp_socket: udp_rtp_socket,
       udp_rtcp_socket: udp_rtcp_socket,
-      client_conns: []
+      client_conns: %{}
     }
 
-    parent_pid = self()
-    Task.start_link(fn -> do_listen(socket, parent_pid) end)
+    server_pid = self()
+    spawn_link(fn -> do_listen(socket, server_pid) end)
 
     {:ok, state}
-  end
-
-  defp do_listen(socket, parent_pid) do
-    case :gen_tcp.accept(socket) do
-      {:ok, client_socket} ->
-        send(parent_pid, {:new_connection, client_socket})
-        do_listen(socket, parent_pid)
-
-      {:error, reason} ->
-        raise("error occurred when listening for client connections: #{inspect(reason)}")
-    end
   end
 
   @impl true
@@ -122,10 +116,11 @@ defmodule Membrane.RTSP.Server do
       |> Map.take([:handler, :udp_rtp_socket, :udp_rtcp_socket])
       |> Map.put(:socket, client_socket)
 
-    case Server.Conn.start(child_state) do
+    case Conn.start(child_state) do
       {:ok, conn_pid} ->
         Process.monitor(conn_pid)
-        {:noreply, %{state | client_conns: [conn_pid | state.client_conns]}}
+        client_conns = Map.put(state.client_conns, conn_pid, client_socket)
+        {:noreply, %{state | client_conns: client_conns}}
 
       _error ->
         {:noreply, state}
@@ -134,11 +129,25 @@ defmodule Membrane.RTSP.Server do
 
   @impl true
   def handle_info({:DOWN, _ref, :process, conn_pid, _reason}, state) do
-    {:noreply, %{state | client_conns: List.delete(state.client_conns, conn_pid)}}
+    {socket, client_conns} = Map.pop(state.client_conns, conn_pid)
+    if socket, do: :inet.close(socket)
+    {:noreply, %{state | client_conns: client_conns}}
   end
 
   @impl true
-  def handle_info(_unexpected_message, state) do
+  def handle_info(unexpected_message, state) do
+    Logger.warning("received unexpected message: #{inspect(unexpected_message)}")
     {:noreply, state}
+  end
+
+  defp do_listen(socket, parent_pid) do
+    case :gen_tcp.accept(socket) do
+      {:ok, client_socket} ->
+        send(parent_pid, {:new_connection, client_socket})
+        do_listen(socket, parent_pid)
+
+      {:error, reason} ->
+        raise("error occurred when accepting client connection: #{inspect(reason)}")
+    end
   end
 end

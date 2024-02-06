@@ -10,12 +10,12 @@ defmodule Membrane.RTSP.Server.Handler do
   """
   @type state :: term()
   @type control_path :: binary()
-  @type ssrc :: integer()
+  @type ssrc :: non_neg_integer()
   @type conn :: :inet.socket()
   @type request :: Request.t()
 
   @typedoc """
-  A type representing the setupped tracks.
+  A type representing the configured media context.
 
   The type is a map from a control path to the setup details. Each track contains the
   following information:
@@ -29,7 +29,7 @@ defmodule Membrane.RTSP.Server.Handler do
     * `address` - An ip address where to send `RTP` and `RTCP` packets. Available only when transport is `UDP`
 
   """
-  @type setupped_tracks :: %{
+  @type configured_media_context :: %{
           control_path() => %{
             :ssrc => ssrc(),
             :transport => :UDP | :TCP,
@@ -56,7 +56,7 @@ defmodule Membrane.RTSP.Server.Handler do
   The return value is the response to be sent back to the client. The implementing
   module need at least set the status of the response.
   """
-  @callback handle_describe(state(), request()) :: {Response.t(), state()}
+  @callback handle_describe(request(), state()) :: {Response.t(), state()}
 
   @doc """
   Callback called when receiving a SETUP request.
@@ -68,16 +68,16 @@ defmodule Membrane.RTSP.Server.Handler do
   @doc """
   Callback called when receiving a PLAY request.
 
-  `setupped_tracks` contains the needed information to start sending media packets.
+  `configured_media_context` contains the needed information to start sending media packets.
   Refer to the type documentation for more details
   """
-  @callback handle_play(setupped_tracks(), state()) :: {Response.t(), state()}
+  @callback handle_play(configured_media_context(), state()) :: {Response.t(), state()}
 
   @doc """
   Callback called when receiving a PAUSE request.
 
-  Upon receiving a PAUSE request, the server should stop sending media data however
-  the resources are not freed. If the stream cannot be stopped (live view), this callback
+  Upon receiving a PAUSE request, the server should stop sending media data, however
+  the resources should not be freed. If the stream cannot be stopped (live view), this callback
   should return `501` (Not Implemented) response.
   """
   @callback handle_pause(state()) :: {Response.t(), state()}

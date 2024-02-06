@@ -23,20 +23,20 @@ defmodule Membrane.RTSP.ServerLogicTest do
 
   test "handle OPTIONS request", %{state: state} do
     mock(:gen_tcp, [send: 2], fn %{}, response ->
-      assert response =~ "200"
+      assert response =~ "RTSP/1.0 200 OK"
       assert response =~ "\r\nPublic: #{Enum.join(Logic.allowed_methods(), ", ")}\r\n"
     end)
 
-    assert {:ok, ^state} =
+    assert state ==
              %Request{method: "OPTIONS"}
              |> Request.stringify(@url)
              |> Logic.process_request(state)
   end
 
   test "handle GET_PARAMETER request", %{state: state} do
-    mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "200" end)
+    mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "RTSP/1.0 200 OK" end)
 
-    assert {:ok, ^state} =
+    assert state ==
              %Request{method: "GET_PARAMETER"}
              |> Request.stringify(@url)
              |> Logic.process_request(state)
@@ -56,13 +56,14 @@ defmodule Membrane.RTSP.ServerLogicTest do
     end)
 
     mock(:gen_tcp, [send: 2], fn %{}, response ->
-      assert response =~ "200"
+      assert response =~ "RTSP/1.0 200 OK"
       assert response =~ "\r\nContent-Type: application/sdp\r\n"
+      assert response =~ "\r\nm=video"
     end)
 
     expected_uri = URI.to_string(@url)
 
-    assert {:ok, %{request_handler_state: %{described_url: ^expected_uri}}} =
+    assert %{request_handler_state: %{described_url: ^expected_uri}} =
              %Request{method: "DESCRIBE"}
              |> Request.stringify(@url)
              |> Logic.process_request(state)
@@ -78,15 +79,17 @@ defmodule Membrane.RTSP.ServerLogicTest do
       end)
 
       mock(:gen_tcp, [send: 2], fn %{}, response ->
-        assert response =~ "200"
+        assert response =~ "RTSP/1.0 200 OK"
         assert response =~ "\r\nSession: #{state.session_id}\r\n"
       end)
 
-      assert {:ok, %{session_state: :ready} = state} =
-               %Request{method: "SETUP"}
-               |> Request.with_header("Transport", "RTP/AVP/TCP;unicast;interleaved=0-1")
-               |> Request.stringify(%URI{@url | path: "/stream/trackId=0"})
-               |> Logic.process_request(state)
+      state =
+        %Request{method: "SETUP"}
+        |> Request.with_header("Transport", "RTP/AVP/TCP;unicast;interleaved=0-1")
+        |> Request.stringify(%URI{@url | path: "/stream/trackId=0"})
+        |> Logic.process_request(state)
+
+      assert state.session_state == :ready
 
       assert %{
                ^control_path => %{
@@ -94,28 +97,32 @@ defmodule Membrane.RTSP.ServerLogicTest do
                  tcp_socket: %{},
                  channels: {0, 1}
                }
-             } = state.setupped_tracks
+             } = state.configured_media
     end
 
     test "invalid/missing transport header", %{state: state} do
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "400" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response ->
+        assert response =~ "RTSP/1.0 400 Bad Request"
+      end)
 
-      assert {:ok, ^state} =
+      assert ^state =
                %Request{method: "SETUP"}
                |> Request.with_header("Transport", "RTP/AVP")
                |> Request.stringify(@url)
                |> Logic.process_request(state)
 
-      assert {:ok, ^state} =
+      assert ^state =
                %Request{method: "SETUP"}
                |> Request.stringify(@url)
                |> Logic.process_request(state)
     end
 
     test "multicast not supported", %{state: state} do
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "400" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response ->
+        assert response =~ "RTSP/1.0 400 Bad Request"
+      end)
 
-      assert {:ok, ^state} =
+      assert ^state =
                %Request{method: "SETUP"}
                |> Request.with_header("Transport", "RTP/AVP;multicast")
                |> Request.stringify(@url)
@@ -123,9 +130,11 @@ defmodule Membrane.RTSP.ServerLogicTest do
     end
 
     test "udp not supported if rtp socket is nil", %{state: state} do
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "400" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response ->
+        assert response =~ "RTSP/1.0 400 Bad Request"
+      end)
 
-      assert {:ok, ^state} =
+      assert ^state =
                %Request{method: "SETUP"}
                |> Request.with_header("Transport", "RTP/AVP;unicast;client_port=3000-3001")
                |> Request.stringify(@url)
@@ -135,9 +144,11 @@ defmodule Membrane.RTSP.ServerLogicTest do
     test "not allowed when playing", %{state: state} do
       state = %State{state | session_state: :playing}
 
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "455" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response ->
+        assert response =~ "RTSP/1.0 455 Method Not Valid In This State"
+      end)
 
-      assert {:ok, ^state} =
+      assert ^state =
                %Request{method: "SETUP"}
                |> Request.stringify(@url)
                |> Logic.process_request(state)
@@ -148,7 +159,7 @@ defmodule Membrane.RTSP.ServerLogicTest do
     test "handle PLAY request", %{state: state} do
       uri = %URI{@url | path: "/stream/trackId=0"}
 
-      setupped_tracks = %{
+      configured_media = %{
         URI.to_string(uri) => %{
           ssrc: :rand.uniform(100_000),
           transport: :UDP,
@@ -158,27 +169,29 @@ defmodule Membrane.RTSP.ServerLogicTest do
         }
       }
 
-      state = %State{state | session_state: :ready, setupped_tracks: setupped_tracks}
+      state = %State{state | session_state: :ready, configured_media: configured_media}
 
-      mock(FakeHandler, [respond: 2], fn ^setupped_tracks, state ->
+      mock(FakeHandler, [respond: 2], fn ^configured_media, state ->
         {Response.new(200), state}
       end)
 
       mock(:gen_tcp, [send: 2], fn %{}, response ->
-        assert response =~ "200"
+        assert response =~ "RTSP/1.0 200 OK"
         assert response =~ "\r\nSession: #{state.session_id}\r\n"
       end)
 
-      assert {:ok, %{session_state: :playing}} =
+      assert %{session_state: :playing} =
                %Request{method: "PLAY"}
                |> Request.stringify(uri)
                |> Logic.process_request(state)
     end
 
     test "not allowed before setup", %{state: state} do
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "455" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response ->
+        assert response =~ "RTSP/1.0 455 Method Not Valid In This State"
+      end)
 
-      assert {:ok, ^state} =
+      assert ^state =
                %Request{method: "PLAY"}
                |> Request.stringify(@url)
                |> Logic.process_request(state)
@@ -190,12 +203,12 @@ defmodule Membrane.RTSP.ServerLogicTest do
       state = %State{
         state
         | session_state: :ready,
-          setupped_tracks: %{"control_path" => %{ssrc: 112_235}}
+          configured_media: %{"control_path" => %{ssrc: 112_235}}
       }
 
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "200" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "RTSP/1.0 200 OK" end)
 
-      assert {:close, %{session_state: :init, setupped_tracks: %{}}} =
+      assert %{session_state: :init, configured_media: %{}} =
                %Request{method: "TEARDOWN"}
                |> Request.stringify(@url)
                |> Logic.process_request(state)
@@ -205,9 +218,9 @@ defmodule Membrane.RTSP.ServerLogicTest do
       state = %State{state | session_state: :playing}
 
       mock(FakeHandler, [respond: 2], fn nil, state -> {Response.new(200), state} end)
-      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "200" end)
+      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "RTSP/1.0 200 OK" end)
 
-      assert {:close, %{session_state: :init, setupped_tracks: %{}}} =
+      assert %{session_state: :init, configured_media: %{}} =
                %Request{method: "TEARDOWN"}
                |> Request.stringify(@url)
                |> Logic.process_request(state)
@@ -216,19 +229,19 @@ defmodule Membrane.RTSP.ServerLogicTest do
 
   test "return 501 (Not Implemented) for not supported methods", %{state: state} do
     mock(:gen_tcp, [send: 2], fn %{}, response ->
-      assert {:ok, %Response{status: 501}} = Response.parse(response)
+      assert response =~ "RTSP/1.0 501 Not Implemented"
     end)
 
     request = "ANNOUNCE rtsp://localhost:554/stream RTSP/1.0\r\n\r\n"
-    assert {:ok, ^state} = Logic.process_request(request, state)
+    assert ^state = Logic.process_request(request, state)
   end
 
   test "parse invalid request returns Bad Request", %{state: state} do
     mock(:gen_tcp, [send: 2], fn %{}, response ->
-      assert {:ok, %Response{status: 400}} = Response.parse(response)
+      assert response =~ "RTSP/1.0 400 Bad Request"
     end)
 
     request = "OPTIONS rtsp://localhost:554/stream RTSP\r\n"
-    assert {:ok, ^state} = Logic.process_request(request, state)
+    assert ^state = Logic.process_request(request, state)
   end
 end

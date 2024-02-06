@@ -5,11 +5,9 @@ defmodule Membrane.RTSP.Server.Conn do
 
   use GenServer
 
-  import Membrane.RTSP.Server.Logic
-
   require Logger
 
-  alias Membrane.RTSP.Server.Logic.State
+  alias Membrane.RTSP.Server.Logic
 
   @max_request_size 1_000_000
 
@@ -20,7 +18,7 @@ defmodule Membrane.RTSP.Server.Conn do
 
   @impl true
   def init(config) do
-    state = %State{
+    state = %Logic.State{
       socket: config.socket,
       request_handler: config.handler,
       request_handler_state: config.handler.handle_open_connection(config.socket),
@@ -33,14 +31,16 @@ defmodule Membrane.RTSP.Server.Conn do
 
   @impl true
   def handle_continue(:process_client_requests, state) do
-    do_process_client_requests(state)
+    {:error, reason} = do_process_client_requests(state)
+    Logger.warning("client connection lost due to #{inspect(reason)}")
     {:stop, :normal, state}
   end
 
   defp do_process_client_requests(state) do
-    with request when is_binary(request) <- get_request(state.socket),
-         {:ok, state} <- process_request(request, state) do
-      do_process_client_requests(state)
+    with {:ok, request} <- get_request(state.socket) do
+      request
+      |> Logic.process_request(state)
+      |> do_process_client_requests()
     end
   end
 
@@ -48,7 +48,7 @@ defmodule Membrane.RTSP.Server.Conn do
     with {:ok, packet} <- :gen_tcp.recv(socket, 0),
          request <- request <> packet,
          false <- byte_size(request) > @max_request_size do
-      if packet != "\r\n", do: get_request(socket, request), else: request
+      if packet != "\r\n", do: get_request(socket, request), else: {:ok, request}
     else
       {:error, reason} -> {:error, reason}
       true -> {:error, :max_request_size_exceeded}
