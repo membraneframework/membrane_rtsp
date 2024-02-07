@@ -75,9 +75,6 @@ defmodule Membrane.RTSP.Response do
     iex> Response.stringify(%Response{version: "1.0", status: 200, headers: []})
     "RTSP/1.0 200 OK\\r\\n\\r\\n"
 
-  ```
-
-  ```
     iex> Response.stringify(%Response{version: "1.0", status: 200, headers: [{"Content-Length", "11"}, {"Session", "15569"}], body: "Hello World"})
     "RTSP/1.0 200 OK\\r\\nContent-Length: 11\\r\\nSession: 15569\\r\\n\\r\\nHello World"
 

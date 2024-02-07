@@ -47,7 +47,7 @@ defmodule Membrane.RTSP.Parser.Transport do
     new_value =
       case Enum.reverse(args) do
         [key] -> {key, nil}
-        [key, "=", value] when is_binary(value) -> {key, value}
+        [key, "=", value] when is_binary(value) or key in ["ttl", "layers"] -> {key, value}
         [key, "=", value] -> {key, {value, value + 1}}
         [key, "=", min_value, max_value] -> {key, {min_value, max_value}}
       end

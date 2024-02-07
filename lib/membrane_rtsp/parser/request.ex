@@ -21,7 +21,7 @@ defmodule Membrane.RTSP.Parser.Request do
   delimiter = choice(Enum.map(["\r\n", "\r", "\n"], &string/1))
 
   method = choice(Enum.map(@methods, &string/1))
-  request_uri = utf8_string([{:not, ?\s}], min: 1)
+  request_uri = utf8_string([{:not, ?\s}, {:not, ?\t}], min: 1)
   rtsp_version = string("RTSP/1.0")
 
   request_line =

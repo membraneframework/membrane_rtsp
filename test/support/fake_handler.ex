@@ -9,6 +9,9 @@ defmodule Membrane.RTSP.Server.FakeHandler do
   def handle_open_connection(_conn), do: %{}
 
   @impl true
+  def handle_close_connection(_state), do: :ok
+
+  @impl true
   def handle_describe(request, state) do
     mockable(__MODULE__).respond(request, state)
   end

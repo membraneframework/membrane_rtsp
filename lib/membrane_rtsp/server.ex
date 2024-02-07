@@ -26,12 +26,13 @@ defmodule Membrane.RTSP.Server do
   alias __MODULE__.Conn
 
   @type server_config :: [
-          name: term(),
-          address: :inet.ip_address(),
-          port: :inet.port_number(),
           handler: module(),
+          name: term(),
+          port: :inet.port_number(),
+          address: :inet.ip_address(),
           udp_rtp_port: :inet.port_number(),
-          udp_rtcp_port: :inet.port_number()
+          udp_rtcp_port: :inet.port_number(),
+          session_timeout: non_neg_integer()
         ]
 
   @doc """
@@ -55,6 +56,8 @@ defmodule Membrane.RTSP.Server do
     - `address` - Specify the address where the `tcp` and `udp` sockets will be bound. Defaults to `:any`.
     - `udp_rtp_port` - The port number of the `UDP` socket that will be opened to send `RTP` packets.
     - `udp_rtcp_port` - The port number of the `UDP` socket that will be opened to send `RTCP` packets.
+    - `session_timeout` - if the server does not receive any request from the client within the specified
+      timeframe, the connection will be closed. Defaults to 60 seconds.
 
     > #### `Server UDP support` {: .warning}
     >
@@ -100,7 +103,8 @@ defmodule Membrane.RTSP.Server do
       handler: config[:handler],
       udp_rtp_socket: udp_rtp_socket,
       udp_rtcp_socket: udp_rtcp_socket,
-      client_conns: %{}
+      client_conns: %{},
+      session_timeout: config[:session_timeout] || :timer.minutes(1)
     }
 
     server_pid = self()
@@ -113,7 +117,7 @@ defmodule Membrane.RTSP.Server do
   def handle_info({:new_connection, client_socket}, state) do
     child_state =
       state
-      |> Map.take([:handler, :udp_rtp_socket, :udp_rtcp_socket])
+      |> Map.take([:handler, :session_timeout, :udp_rtp_socket, :udp_rtcp_socket])
       |> Map.put(:socket, client_socket)
 
     case Conn.start(child_state) do
@@ -122,7 +126,12 @@ defmodule Membrane.RTSP.Server do
         client_conns = Map.put(state.client_conns, conn_pid, client_socket)
         {:noreply, %{state | client_conns: client_conns}}
 
-      _error ->
+      {:error, reason} ->
+        Logger.error("""
+        Could not start client connection handling
+        Reason: #{inspect(reason)}
+        """)
+
         {:noreply, state}
     end
   end

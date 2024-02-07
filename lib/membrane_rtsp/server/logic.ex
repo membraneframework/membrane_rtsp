@@ -18,6 +18,7 @@ defmodule Membrane.RTSP.Server.Logic do
                   :rtp_socket,
                   :rtcp_socket,
                   :request_handler_state,
+                  :session_timeout,
                   configured_media: %{},
                   session_id: UUID.uuid4(),
                   session_state: :init
@@ -31,7 +32,8 @@ defmodule Membrane.RTSP.Server.Logic do
             request_handler_state: term(),
             configured_media: Server.Handler.configured_media_context(),
             session_id: binary(),
-            session_state: :init | :ready | :playing | :paused
+            session_state: :init | :ready | :playing | :paused,
+            session_timeout: non_neg_integer()
           }
   end
 

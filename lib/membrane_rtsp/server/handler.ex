@@ -51,6 +51,14 @@ defmodule Membrane.RTSP.Server.Handler do
   @callback handle_open_connection(conn()) :: state()
 
   @doc """
+  Callback called when a connection is closed.
+
+  A handler may not receive a `TEARDOWN` request to free resources, so it
+  can use this callback to do so.
+  """
+  @callback handle_close_connection(state()) :: :ok
+
+  @doc """
   Callback called when receiving a DESCRIBE request.
 
   The return value is the response to be sent back to the client. The implementing
@@ -77,7 +85,7 @@ defmodule Membrane.RTSP.Server.Handler do
   Callback called when receiving a PAUSE request.
 
   Upon receiving a PAUSE request, the server should stop sending media data, however
-  the resources should not be freed. If the stream cannot be stopped (live view), this callback
+  the resources should not be freed. If the stream cannot be stopped (e.g. live view), this callback
   should return `501` (Not Implemented) response.
   """
   @callback handle_pause(state()) :: {Response.t(), state()}
