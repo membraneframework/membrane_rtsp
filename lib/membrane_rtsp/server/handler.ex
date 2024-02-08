@@ -1,6 +1,69 @@
 defmodule Membrane.RTSP.Server.Handler do
   @moduledoc """
   Behaviour describing client request handling for Real Time Streaming Protocol.
+
+  In a typical RTSP session where the client requests a media stream from a server, the
+  interactions goes as follows:
+
+  ```mermaid
+  sequenceDiagram
+      participant C as Client
+      participant S as RTSP Server
+
+      C->>+S: connect to the server (rtsp://server_host:554/stream)
+      S->>-C: connection accepted
+
+      note right of C: Get supported methods
+      C->>+S: OPTIONS rtsp://server_host:554/stream
+      S->>-C: List of allowed methods
+
+      note right of C: Get the media description
+      C->>+S: DESCRIBE rtsp://server_host:554/stream
+      S->>-C: Media description (usually as an SDP)
+
+      note right of C: Setup the video
+      C->>+S: SETUP rtsp://server_host:554/stream/video
+      S->>-C: Video track setup (returns also a session id)
+
+      note right of C: Setup the audio
+      C->>+S: SETUP rtsp://server_host:554/stream/audio
+      S->>-C: Audio track setup
+
+      note right of C: Start playing the media
+      C->>+S: PLAY rtsp://server_host:554/stream/audio
+      S->>-C: Video/audio data are sent to the client via UDP, TCP or Multicast
+
+      note right of C: Stop and free the resources
+      C->>+S: TEARDOWN rtsp://server_host:554/stream/audio
+      S->>-C: Media streaming stopped and resources are freed
+  ```
+
+  We omitted other methods for brevity such as `GET_PARAMETER` where the client wants to keep the
+  session alive and `PAUSE` to pause streaming without freeing the resources used by the session.
+
+  ## Response
+  The handler is responsible for returning the right response and managing the media resources
+  while the server will be responsible for parsing client request, calling the handler callbacks
+  and forwarding the response to the client.
+
+  Except for `c:handle_describe/2` where the handler should return the media description (usually as an SDP),
+  the handler need only to set the response status using `Membrane.RTSP.Response.new/1`. In most cases
+  the handler should not try to set the headers itself except for `WWW-Authenticate` in case authentication
+  using `basic` or `digest` is required.
+
+  ## State
+  The handler may need to keep some state between the callback calls. To achieve this, the returned value from
+  `c:handle_open_connection/1` callback will be used as a state and will be the last argument for the other callbacks.
+
+  > #### `Missing callbacks in the handler` {: .info}
+  >
+  > You may notice that some methods have no corresponding callback, the reason for this is:
+  >
+  > `OPTIONS` apply to the server itself, not to individual presentation or resources
+  >
+  > `GET_PARAMETER` is used to keep the session alive and the server is responsible for setting session timeout
+  >
+  > The other methods are not yet implemented.
   """
 
   alias Membrane.RTSP.{Request, Response}
@@ -54,9 +117,9 @@ defmodule Membrane.RTSP.Server.Handler do
   Callback called when a connection is closed.
 
   A handler may not receive a `TEARDOWN` request to free resources, so it
-  can use this callback to do so.
+  can use this callback to do it.
   """
-  @callback handle_close_connection(state()) :: :ok
+  @callback handle_closed_connection(state()) :: :ok
 
   @doc """
   Callback called when receiving a DESCRIBE request.

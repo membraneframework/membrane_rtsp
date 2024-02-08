@@ -33,7 +33,7 @@ defmodule Membrane.RTSP.Server.Conn do
   @impl true
   def handle_continue(:process_client_requests, state) do
     do_process_client_requests(state)
-    state.request_handler.handle_close_connection(state.request_handler_state)
+    state.request_handler.handle_closed_connection(state.request_handler_state)
     {:stop, :normal, state}
   end
 
