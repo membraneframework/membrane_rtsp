@@ -15,6 +15,12 @@ defmodule Membrane.RTSP.Request do
           path: nil | binary()
         }
 
+  @type transport_header :: [
+          transport: :TCP | :UDP,
+          mode: :unicast | :multicast,
+          parameters: map()
+        ]
+
   @doc """
   Attaches a header to a RTSP request struct.
 
@@ -116,11 +122,19 @@ defmodule Membrane.RTSP.Request do
     iex> Request.parse_transport_header(req)
     {:ok, [transport: :UDP, mode: :unicast, parameters: %{"client_port" => {30001, 30002}}]}
 
+    iex> req = %Request{method: "SETUP", headers: [{"Transport", "RTP/AVP;ttl=15"}]}
+    iex> Request.parse_transport_header(req)
+    {:ok, [transport: :UDP, mode: :multicast, parameters: %{"ttl" => 15}]}
+
     iex> req = %Request{method: "SETUP", headers: [{"Transport", "RTP/AVP/TCP;unicast;interleaved=0-1"}]}
     iex> Request.parse_transport_header(req)
     {:ok, [transport: :TCP, mode: :unicast, parameters: %{"interleaved" => {0, 1}}]}
 
     iex> req = %Request{method: "SETUP", headers: [{"Transport", "RTP/AVP"}]}
+    iex> Request.parse_transport_header(req)
+    {:ok, [transport: :UDP, mode: :multicast, parameters: %{}]}
+
+    iex> req = %Request{method: "SETUP", headers: [{"Transport", "RTP/AV"}]}
     iex> Request.parse_transport_header(req)
     {:error, :invalid_header}
 
@@ -130,7 +144,7 @@ defmodule Membrane.RTSP.Request do
   ```
   """
   @spec parse_transport_header(t()) ::
-          {:ok, Parser.transport_header()} | {:error, :no_such_header | :invalid_header}
+          {:ok, transport_header()} | {:error, :no_such_header | :invalid_header}
   def parse_transport_header(request) do
     with {:ok, value} <- get_header(request, "Transport") do
       Parser.parse_transport_header(value)

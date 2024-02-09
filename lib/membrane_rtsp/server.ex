@@ -57,7 +57,7 @@ defmodule Membrane.RTSP.Server do
     - `udp_rtp_port` - The port number of the `UDP` socket that will be opened to send `RTP` packets.
     - `udp_rtcp_port` - The port number of the `UDP` socket that will be opened to send `RTCP` packets.
     - `session_timeout` - if the server does not receive any request from the client within the specified
-      timeframe, the connection will be closed. Defaults to 60 seconds.
+      timeframe (in seconds), the connection will be closed. Defaults to 60 seconds.
 
     > #### `Server UDP support` {: .warning}
     >
@@ -104,7 +104,7 @@ defmodule Membrane.RTSP.Server do
       udp_rtp_socket: udp_rtp_socket,
       udp_rtcp_socket: udp_rtcp_socket,
       client_conns: %{},
-      session_timeout: config[:session_timeout] || :timer.minutes(1)
+      session_timeout: (config[:session_timeout] || 60) |> :timer.seconds()
     }
 
     server_pid = self()

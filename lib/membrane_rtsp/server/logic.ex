@@ -101,7 +101,7 @@ defmodule Membrane.RTSP.Server.Logic do
     {response, request_handler_state} =
       state.request_handler.handle_play(state.configured_media, state.request_handler_state)
 
-    response = response |> Response.with_header("Session", state.session_id)
+    response = inject_session_header(response, state)
 
     if Response.ok?(response) do
       {response, %{state | request_handler_state: request_handler_state, session_state: :playing}}
@@ -114,7 +114,7 @@ defmodule Membrane.RTSP.Server.Logic do
     {response, request_handler_state} =
       state.request_handler.handle_pause(state.request_handler_state)
 
-    response = response |> Response.with_header("Session", state.session_id)
+    response = inject_session_header(response, state)
 
     if Response.ok?(response) do
       {response, %{state | request_handler_state: request_handler_state, session_state: :paused}}
@@ -126,7 +126,7 @@ defmodule Membrane.RTSP.Server.Logic do
   defp do_handle_request(%Request{method: "TEARDOWN"}, state)
        when state.session_state in [:init, :ready] do
     Response.new(200)
-    |> Response.with_header("Session", state.session_id)
+    |> inject_session_header(state)
     |> then(&{&1, %{state | configured_media: %{}, session_state: :init}})
   end
 
@@ -135,7 +135,7 @@ defmodule Membrane.RTSP.Server.Logic do
       state.request_handler.handle_teardown(state.request_handler_state)
 
     response
-    |> Response.with_header("Session", state.session_id)
+    |> inject_session_header(state)
     |> then(&{&1, %{state | session_state: :init, configured_media: %{}}})
   end
 
@@ -158,7 +158,7 @@ defmodule Membrane.RTSP.Server.Logic do
   end
 
   defp do_handle_setup_response(request, response, transport_opts, state) do
-    response = response |> Response.with_header("Session", state.session_id)
+    response = inject_session_header(response, state)
 
     if Response.ok?(response) do
       track_config = build_track_config(transport_opts, state)
@@ -225,5 +225,15 @@ defmodule Membrane.RTSP.Server.Logic do
       {:ok, value} -> Response.with_header(response, "CSeq", value)
       {:error, _no_such_header} -> response
     end
+  end
+
+  defp inject_session_header(response, state) do
+    timeout_in_seconds = div(state.session_timeout, 1_000)
+
+    Response.with_header(
+      response,
+      "Session",
+      state.session_id <> ";timeout=#{timeout_in_seconds}"
+    )
   end
 end

@@ -4,12 +4,6 @@ defmodule Membrane.RTSP.Parser do
   alias __MODULE__.{Request, Transport}
   alias Membrane.RTSP
 
-  @type transport_header :: [
-          transport: :TCP | :UDP,
-          mode: :unicast | :multicast,
-          parameters: map()
-        ]
-
   @spec parse_request(binary()) :: {:ok, RTSP.Request.t()} | {:error, term()}
   def parse_request(request) do
     case Request.parse_request(request) do
@@ -35,19 +29,10 @@ defmodule Membrane.RTSP.Parser do
   end
 
   @spec parse_transport_header(binary()) ::
-          {:ok, transport_header()} | {:error, :invalid_header}
+          {:ok, Request.transport_header()} | {:error, :invalid_header}
   def parse_transport_header(header) do
     case Transport.parse_transport_header(header) do
-      {:ok, args, _rest, _context, _line, _byte_offset} ->
-        {transport, mode, parameters} =
-          case args do
-            [transport, mode | parameters] when transport in ["UDP", "TCP"] ->
-              {transport, mode, parameters}
-
-            [mode | parameters] when mode in ["unicast", "multicast"] ->
-              {"UDP", mode, parameters}
-          end
-
+      {:ok, [transport, mode | parameters], _rest, _context, _line, _byte_offset} ->
         {:ok,
          [
            transport: String.to_atom(transport),

@@ -15,7 +15,8 @@ defmodule Membrane.RTSP.ServerLogicTest do
     state = %State{
       socket: %{},
       request_handler: FakeHandler,
-      request_handler_state: FakeHandler.handle_open_connection(nil)
+      request_handler_state: FakeHandler.handle_open_connection(nil),
+      session_timeout: :timer.minutes(1)
     }
 
     [state: state]
@@ -80,7 +81,7 @@ defmodule Membrane.RTSP.ServerLogicTest do
 
       mock(:gen_tcp, [send: 2], fn %{}, response ->
         assert response =~ "RTSP/1.0 200 OK"
-        assert response =~ "\r\nSession: #{state.session_id}\r\n"
+        assert response =~ "\r\nSession: #{state.session_id};timeout=60\r\n"
       end)
 
       state =
@@ -177,7 +178,7 @@ defmodule Membrane.RTSP.ServerLogicTest do
 
       mock(:gen_tcp, [send: 2], fn %{}, response ->
         assert response =~ "RTSP/1.0 200 OK"
-        assert response =~ "\r\nSession: #{state.session_id}\r\n"
+        assert response =~ "\r\nSession: #{state.session_id};timeout=60\r\n"
       end)
 
       assert %{session_state: :playing} =

@@ -16,11 +16,12 @@ Mix.install([
 
 In this guide, we'll create a simple RTSP server that streams an H264 file to clients via UDP and TCP
 
-Before we start the server itself, we'll first create the membrane pipeline that will server the H264 file.
+Before we start the server itself, we'll first create the Membrane pipeline that will serve the H264 file.
 
 ## TCP/UDP Sink
 
-To serve media data to the client over the same connection used for controlling the session, we need to create a TCP payloader sink to wrap the RTP packets as described in RFC 2326 Section 10.12
+To serve media data to the client over the same connection used for controlling the session, we need to create a TCP payloader sink 
+to wrap the RTP packets as described in [RFC 2326 Section 10.12](https://www.rfc-editor.org/rfc/rfc2326#page-40)
 
 ```elixir
 defmodule BasicServer.TCP.Sink do
