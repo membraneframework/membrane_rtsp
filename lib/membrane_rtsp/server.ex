@@ -69,6 +69,17 @@ defmodule Membrane.RTSP.Server do
     GenServer.start_link(__MODULE__, config, name: config[:name])
   end
 
+  @doc """
+  Get the port number of the server.
+
+  If the server started with port number 0, the os will choose an available port to
+  assign to the server.
+  """
+  @spec port_number(pid() | GenServer.name()) :: {:ok, :inet.port_number()} | {:error, any()}
+  def port_number(server) do
+    GenServer.call(server, :port_number)
+  end
+
   @impl true
   def init(config) do
     address = config[:address] || :any
@@ -111,6 +122,11 @@ defmodule Membrane.RTSP.Server do
     spawn_link(fn -> do_listen(socket, server_pid) end)
 
     {:ok, state}
+  end
+
+  @impl true
+  def handle_call(:port_number, _from, state) do
+    {:reply, :inet.port(state.socket), state}
   end
 
   @impl true
