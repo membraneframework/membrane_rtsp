@@ -98,7 +98,7 @@ defmodule BasicServer.Pipeline do
     #{inspect(options)}
     """)
 
-    spec = [
+    spec =
       child(:source, %Membrane.File.Source{location: options[:file_location]})
       |> child(:parser, %Membrane.H264.Parser{
         generate_best_effort_timestamps: %{framerate: {60, 1}},
@@ -114,7 +114,6 @@ defmodule BasicServer.Pipeline do
         options: [payload_type: options[:payload_type], clock_rate: options[:clock_rate]]
       )
       |> build_sink(options)
-    ]
 
     {[spec: spec], %{}}
   end

@@ -174,9 +174,8 @@ defmodule Membrane.RTSP.Response do
   ```
   """
   @spec ok?(t()) :: boolean()
-  def ok?(%__MODULE__{status: status}) do
-    div(status, 100) == 2
-  end
+  def ok?(%__MODULE__{status: status}) when status >= 200 and status < 300, do: true
+  def ok?(_response), do: false
 
   @spec parse_start_line(raw_response :: binary()) ::
           {:ok, {response :: t(), remainder :: binary}} | {:error, :invalid_start_line}

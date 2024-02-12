@@ -3,11 +3,14 @@ defmodule Membrane.RTSP.Server do
   Implementation of an RTSP server.
 
   ## Usage
-  To use the RTSP server, you should start it and provide some configuration. Often in your supervision tree:
+  To use the RTSP server, you should start it and provide some configuration. To start a new server
+  under a supervision tree:
   ```
   children = [
     {Membrane.RTSP.Server, [port: 8554, handler: MyRequestHandler]}
   ]
+
+  Supervisor.start_link(children, strategy: :one_for_one)
   ```
 
   Or start it directly by calling `start_link/1` or `start/1`.
