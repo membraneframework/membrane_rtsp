@@ -17,6 +17,39 @@ defmodule Membrane.RTSP.Response do
 
   @type result :: {:ok, t()} | {:error, atom()}
 
+  @spec new(non_neg_integer()) :: t()
+  def new(status) do
+    %__MODULE__{version: "1.0", status: status}
+  end
+
+  @doc """
+  Attaches a header to a RTSP response struct.
+
+  ```
+    iex> Response.with_header(Response.new(200), "header_name", "header_value")
+    %Response{version: "1.0", status: 200, headers: [{"header_name","header_value"}]}
+
+  ```
+  """
+  @spec with_header(t(), binary(), binary()) :: t()
+  def with_header(%__MODULE__{headers: headers} = request, name, value)
+      when is_binary(name) and is_binary(value),
+      do: %__MODULE__{request | headers: [{name, value} | headers]}
+
+  @doc """
+  Adds a body to the response and sets `Content-Length` header
+
+  ```
+    iex> Response.with_body(Response.new(200), "Hello World")
+    %Response{version: "1.0", status: 200, headers: [{"Content-Length", "11"}], body: "Hello World"}
+
+  ```
+  """
+  @spec with_body(t(), binary()) :: t()
+  def with_body(%__MODULE__{} = response, body) do
+    with_header(%__MODULE__{response | body: body}, "Content-Length", "#{byte_size(body)}")
+  end
+
   @doc """
   Parses RTSP response.
 
@@ -32,6 +65,30 @@ defmodule Membrane.RTSP.Response do
          {:ok, body} <- parse_body(body, headers) do
       {:ok, %__MODULE__{response | headers: headers, body: body}}
     end
+  end
+
+  @doc """
+  Renders an RTSP response struct into a binary that is a valid
+  RTSP response string that can be transmitted via communication channel.
+
+  ```
+    iex> Response.stringify(%Response{version: "1.0", status: 200, headers: []})
+    "RTSP/1.0 200 OK\\r\\n\\r\\n"
+
+    iex> Response.stringify(%Response{version: "1.0", status: 200, headers: [{"Content-Length", "11"}, {"Session", "15569"}], body: "Hello World"})
+    "RTSP/1.0 200 OK\\r\\nContent-Length: 11\\r\\nSession: 15569\\r\\n\\r\\nHello World"
+
+  ```
+  """
+  @spec stringify(t()) :: binary()
+  def stringify(%__MODULE__{status: status} = response) do
+    status_line = Enum.join(["RTSP/1.0", "#{status}", render_status(status)], " ")
+
+    Enum.join([
+      status_line,
+      render_headers(response.headers),
+      "\r\n\r\n#{response.body}"
+    ])
   end
 
   @doc """
@@ -96,13 +153,29 @@ defmodule Membrane.RTSP.Response do
   ```
 
   """
-  @spec get_header(__MODULE__.t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
+  @spec get_header(t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
   def get_header(%__MODULE__{headers: headers}, name) do
     case List.keyfind(headers, name, 0) do
       {_name, value} -> {:ok, value}
       nil -> {:error, :no_such_header}
     end
   end
+
+  @doc """
+  Returns true if the response is a success.
+
+  ```
+    iex> Response.ok?(Response.new(204))
+    true
+
+    iex> Response.ok?(Response.new(400))
+    false
+
+  ```
+  """
+  @spec ok?(t()) :: boolean()
+  def ok?(%__MODULE__{status: status}) when status >= 200 and status < 300, do: true
+  def ok?(_response), do: false
 
   @spec parse_start_line(raw_response :: binary()) ::
           {:ok, {response :: t(), remainder :: binary}} | {:error, :invalid_start_line}
@@ -145,4 +218,24 @@ defmodule Membrane.RTSP.Response do
         {:ok, data}
     end
   end
+
+  defp render_headers([]), do: ""
+
+  defp render_headers(list) do
+    list
+    |> Enum.map_join("\r\n", &header_to_string/1)
+    |> String.replace_prefix("", "\r\n")
+  end
+
+  defp header_to_string({header, value}), do: header <> ": " <> value
+
+  defp render_status(200), do: "OK"
+  defp render_status(400), do: "Bad Request"
+  defp render_status(401), do: "Unauthorized"
+  defp render_status(403), do: "Forbidden"
+  defp render_status(404), do: "Not Found"
+  defp render_status(405), do: "Method Not Allowed"
+  defp render_status(455), do: "Method Not Valid In This State"
+  defp render_status(500), do: "Internal Server Error"
+  defp render_status(501), do: "Not Implemented"
 end
