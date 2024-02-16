@@ -79,16 +79,13 @@ defmodule Membrane.RTSP.Logic do
   end
 
   @spec parse_response(binary(), State.t()) ::
-          {:reply, {:ok, Response.t()} | {:error, any()}, State.t()}
+          {:ok, Response.t(), State.t()} | {:error, reason :: any()}
   def parse_response(raw_response, state) do
     with {:ok, parsed_response} <- Response.parse(raw_response),
          {:ok, state} <- handle_session_id(parsed_response, state),
          {:ok, state} <- detect_authentication_type(parsed_response, state) do
       state = %State{state | cseq: state.cseq + 1}
-      {:reply, {:ok, parsed_response}, state}
-    else
-      {:error, :socket_closed} -> raise("Remote has closed a socket")
-      {:error, _other} = error -> {:reply, error, state}
+      {:ok, parsed_response, state}
     end
   end
 

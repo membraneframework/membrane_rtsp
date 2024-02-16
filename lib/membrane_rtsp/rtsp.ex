@@ -73,8 +73,11 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_call({:execute, request}, _from, state) do
-    with {:ok, raw_response} <- execute(request, state) do
-      parse_response(raw_response, state)
+    with {:ok, raw_response} <- execute(request, state),
+         {:ok, response, state} <- parse_response(raw_response, state) do
+      {:reply, {:ok, response}, state}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
@@ -83,7 +86,11 @@ defmodule Membrane.RTSP do
   end
 
   def handle_call({:parse_response, raw_response}, _from, state) do
-    parse_response(raw_response, state)
+    with {:ok, response, state} <- parse_response(raw_response, state) do
+      {:reply, {:ok, response}, state}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
   end
 
   @impl true
