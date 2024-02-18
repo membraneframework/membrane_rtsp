@@ -69,6 +69,8 @@ defmodule Membrane.RTSP.Request do
   "DESCRIBE rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\n"
   iex> Request.stringify(%Request{method: "PLAY", path: "trackID=2"}, uri)
   "PLAY rtsp://domain.net:554/path:movie.mov/trackID=2 RTSP/1.0\\r\\n\\r\\n"
+  iex> Request.stringify(%Request{method: "SET_PARAMETER", body: "parameter:value"}, uri)
+  "SET_PARAMETER rtsp://domain.net:554/path:movie.mov RTSP/1.0\\r\\n\\r\\nparameter:value"
 
   ```
 
@@ -89,7 +91,8 @@ defmodule Membrane.RTSP.Request do
       process_uri(request, uri),
       " RTSP/1.0",
       render_headers(headers),
-      "\r\n\r\n"
+      "\r\n\r\n",
+      request.body
     ])
   end
 
