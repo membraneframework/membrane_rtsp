@@ -123,7 +123,7 @@ defmodule Membrane.RTSP do
   @spec request(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: Response.result()
   def request(session, method, headers \\ [], body \\ "", path \\ nil) do
     request = %Request{method: method, headers: headers, body: body, path: path}
-    GenServer.call(session, {:execute, request})
+    GenServer.call(session, {:execute, request}, :infinity)
   end
 
   @spec request_no_response(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: :ok
