@@ -29,7 +29,7 @@ defmodule Membrane.RTSP.Parser do
   end
 
   @spec parse_transport_header(binary()) ::
-          {:ok, Request.transport_header()} | {:error, :invalid_header}
+          {:ok, RTSP.Request.transport_header()} | {:error, :invalid_header}
   def parse_transport_header(header) do
     case Transport.parse_transport_header(header) do
       {:ok, [transport, mode | parameters], _rest, _context, _line, _byte_offset} ->

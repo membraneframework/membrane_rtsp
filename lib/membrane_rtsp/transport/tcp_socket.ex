@@ -12,7 +12,7 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   import Mockery.Macro
 
   @connection_timeout 1000
-  @tcp_receive_timeout 5000
+  @response_timeout 5000
 
   @impl true
   def init(%URI{} = connection_info, options \\ []) do
@@ -35,9 +35,9 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   end
 
   @impl true
-  def execute(request, socket, get_response: get_response) do
+  def execute(request, socket, options) do
     case mockable(:gen_tcp).send(socket, request) do
-      :ok -> if get_response, do: recv(socket), else: :ok
+      :ok -> if options[:get_response], do: recv(socket, options), else: :ok
       error -> error
     end
   end
@@ -50,12 +50,12 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
   @impl true
   def close(_state), do: :ok
 
-  defp recv(socket, length \\ 0, acc \\ <<>>) do
-    case do_recv(socket, length, acc) do
+  defp recv(socket, options, length \\ 0, acc \\ <<>>) do
+    case do_recv(socket, options, length, acc) do
       {:ok, data} ->
         case Membrane.RTSP.Response.verify_content_length(data) do
           {:ok, _expected, _received} -> {:ok, data}
-          {:error, expected, received} -> recv(socket, expected - received, data)
+          {:error, expected, received} -> recv(socket, options, expected - received, data)
         end
 
       {:error, reason} ->
@@ -63,8 +63,10 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     end
   end
 
-  defp do_recv(socket, length, acc) do
-    case mockable(:gen_tcp).recv(socket, length, @tcp_receive_timeout) do
+  defp do_recv(socket, options, length, acc) do
+    timeout = options[:response_timeout] || @response_timeout
+
+    case mockable(:gen_tcp).recv(socket, length, timeout) do
       {:ok, data} -> {:ok, acc <> data}
       {:error, reason} -> {:error, reason}
     end
