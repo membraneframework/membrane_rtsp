@@ -1,7 +1,7 @@
 defmodule Membrane.RTSP.MixProject do
   use Mix.Project
 
-  @version "0.5.4"
+  @version "0.6.0"
   @github_url "https://github.com/membraneframework/membrane_rtsp"
 
   def project do
