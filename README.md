@@ -18,14 +18,14 @@ of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:membrane_rtsp, "~> 0.5.3"}
+    {:membrane_rtsp, "~> 0.5.4"}
   ]
 end
 ```
 
 ## Usage
 
-To use Membrane RTSP client you must first start a session:
+To use the Membrane RTSP client you must first start a session:
 
 ```elixir
 {:ok, session} = Membrane.RTSP.start_link("rtsp://domain.name:port/path")
@@ -52,7 +52,7 @@ alias Membrane.RTSP.Response
 {:ok, %Response{status: 200}} = RTSP.play(session)
 ```
 
-If you started session without linking it, it is advised to close it manually
+If you started a session without linking it, it is advised to close it manually
 by calling:
 
 ```elixir
@@ -60,7 +60,7 @@ RTSP.close(session)
 ```
 
 
-## Implementing custom transport layer
+## Implementing a custom transport layer
 
 To implement custom request execution logic you must implement
 `Membrane.RTSP.Transport` behavior. Then you can pass
