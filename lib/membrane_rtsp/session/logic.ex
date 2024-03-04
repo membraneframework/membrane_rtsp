@@ -50,6 +50,7 @@ defmodule Membrane.RTSP.Logic do
 
     request
     |> inject_session_header(session_id)
+    |> inject_content_length()
     |> Request.with_header("CSeq", cseq |> to_string())
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
@@ -62,6 +63,14 @@ defmodule Membrane.RTSP.Logic do
     case session_id do
       nil -> request
       session -> Request.with_header(request, "Session", session)
+    end
+  end
+
+  @spec inject_content_length(Request.t()) :: Request.t()
+  def inject_content_length(request) do
+    case request.body do
+      "" -> request
+      body -> Request.with_header(request, "Content-Length", to_string(byte_size(body)))
     end
   end
 
