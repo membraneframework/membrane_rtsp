@@ -18,7 +18,7 @@ of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:membrane_rtsp, "~> 0.6.1"}
+    {:membrane_rtsp, "~> 0.6.2"}
   ]
 end
 ```
