@@ -3,7 +3,7 @@ defmodule Membrane.RTSP.Logic do
   Logic for RTSP session
   """
   alias Membrane.RTSP.{Request, Response}
-  @user_agent "MembraneRTSP$/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
+  @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
     @moduledoc "Struct representing the state of RTSP session"
