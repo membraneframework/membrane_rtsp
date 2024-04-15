@@ -108,7 +108,6 @@ defmodule Membrane.RTSP.Response do
           {:ok | :error, expected_size :: non_neg_integer(), actual_size :: non_neg_integer()}
   def verify_content_length(response) do
     split_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
-    IO.inspect(split_response)
     headers = Enum.at(split_response, 0)
     body = Enum.at(split_response, 1)
 
