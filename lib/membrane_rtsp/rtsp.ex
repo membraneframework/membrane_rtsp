@@ -80,14 +80,15 @@ defmodule Membrane.RTSP do
   end
 
   def handle_call(
-        {:get_socket_control, new_controlling_process},
+        {:transfer_socket_control, new_controlling_process},
         _from,
         %State{socket: socket} = state
       ) do
-    case :gen_tcp.controlling_process(socket, new_controlling_process) do
-      :ok -> {:reply, {:ok, socket}, state}
-      {:error, :not_owner} -> {:reply, {:error, :not_owner}, state}
-    end
+    {:reply, :gen_tcp.controlling_process(socket, new_controlling_process), state}
+  end
+
+  def handle_call(:get_socket, _from, %State{socket: socket} = state) do
+    {:reply, socket, state}
   end
 
   def handle_call({:parse_response, raw_response}, _from, state) do
@@ -150,9 +151,16 @@ defmodule Membrane.RTSP do
 
   @type headers :: [{binary(), binary()}]
 
-  @spec get_socket_control(t(), pid()) :: {:ok, :gen_tcp.socket()} | {:error, :not_owner}
-  def get_socket_control(session, new_controlling_process) do
-    GenServer.call(session, {:get_socket_control, new_controlling_process})
+  @spec transfer_socket_control(t(), pid()) ::
+          :ok | {:error, :closed | :not_owner | :badarg | :inet.posix()}
+  def transfer_socket_control(session, new_controlling_process) do
+    IO.inspect("passing control")
+    GenServer.call(session, {:transfer_socket_control, new_controlling_process})
+  end
+
+  @spec get_socket(t()) :: :gen_tcp.socket()
+  def get_socket(session) do
+    GenServer.call(session, :get_socket)
   end
 
   @spec get_parameter_no_response(t(), headers(), binary()) :: :ok
