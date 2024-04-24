@@ -1,4 +1,4 @@
-defmodule Membrane.RTSP.Transport.TCPSocket do
+defmodule Membrane.RTSP.TCPSocket do
   @moduledoc """
   This module implements the Transport behaviour and transmits requests over TCP
   Socket keeping connection until either session is closed or connection is
@@ -8,13 +8,11 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     * timeout - time after request will be deemed missing and error shall be
      returned.
   """
-  use Membrane.RTSP.Transport
   import Mockery.Macro
 
   @connection_timeout 1000
   @response_timeout 5000
 
-  @impl true
   def init(%URI{} = connection_info, options \\ []) do
     connection_timeout = options[:connection_timeout] || @connection_timeout
 
@@ -34,7 +32,8 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     )
   end
 
-  @impl true
+  @spec execute(binary(), :gen_tcp.socket(), Keyword.t()) ::
+          :ok | {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
   def execute(request, socket, options) do
     case mockable(:gen_tcp).send(socket, request) do
       :ok -> if options[:get_response], do: recv(socket, options), else: :ok
@@ -42,12 +41,10 @@ defmodule Membrane.RTSP.Transport.TCPSocket do
     end
   end
 
-  @impl true
   def handle_info({:tcp_closed, _socket}, state) do
     {:stop, :socket_closed, state}
   end
 
-  @impl true
   def close(_state), do: :ok
 
   defp recv(socket, options, length \\ 0, acc \\ <<>>) do

@@ -6,7 +6,7 @@ defmodule Membrane.RTSP do
 
   alias Membrane.RTSP
   alias Membrane.RTSP.Logic.State
-  alias Membrane.RTSP.{Request, Response}
+  alias Membrane.RTSP.{Request, Response, TCPSocket}
 
   @type t() :: pid()
 
@@ -22,21 +22,20 @@ defmodule Membrane.RTSP do
     * options - a keyword list that shall be passed when executing request over
     transport
   """
-  @spec start_link(binary(), module() | URI.t(), Keyword.t()) :: GenServer.on_start()
-  def start_link(url, transport \\ Membrane.RTSP.Transport.TCPSocket, options \\ []) do
-    do_start(url, transport, options, &GenServer.start_link/2)
+  @spec start_link(binary() | URI.t(), Keyword.t()) :: GenServer.on_start()
+  def start_link(url, options \\ []) do
+    do_start(url, options, &GenServer.start_link/2)
   end
 
-  @spec start(binary(), module() | URI.t(), Keyword.t()) :: GenServer.on_start()
-  def start(url, transport \\ Membrane.RTSP.Transport.TCPSocket, options \\ []) do
-    do_start(url, transport, options, &GenServer.start/2)
+  @spec start(binary() | URI.t(), Keyword.t()) :: GenServer.on_start()
+  def start(url, options \\ []) do
+    do_start(url, options, &GenServer.start/2)
   end
 
-  defp do_start(url, transport, options, start_fun) do
+  defp do_start(url, options, start_fun) do
     case URI.parse(url) do
       %URI{host: host, scheme: "rtsp"} = url when is_binary(host) ->
         start_fun.(__MODULE__, %{
-          transport: transport,
           url: %URI{url | port: url.port || @default_rtsp_port},
           options: options
         })
@@ -47,7 +46,7 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def init(%{url: url, options: options, transport: transport_module}) do
+  def init(%{url: url, options: options}) do
     auth_type =
       case url do
         %URI{userinfo: nil} -> nil
@@ -56,10 +55,9 @@ defmodule Membrane.RTSP do
         %URI{userinfo: info} when is_binary(info) -> :basic
       end
 
-    with {:ok, transport} <- transport_module.init(url, options) do
+    with {:ok, socket} <- TCPSocket.init(url, options) do
       state = %State{
-        transport: transport,
-        transport_module: transport_module,
+        socket: socket,
         uri: url,
         execution_options: options,
         auth: auth_type
@@ -81,8 +79,13 @@ defmodule Membrane.RTSP do
     end
   end
 
-  def handle_call(:get_transport, _from, %State{transport: transport} = state) do
-    {:reply, transport, state}
+  def handle_call(
+        {:get_socket_control, new_controlling_process},
+        _from,
+        %State{socket: socket} = state
+      ) do
+    :ok = :gen_tcp.controlling_process(socket, new_controlling_process)
+    {:reply, socket, state}
   end
 
   def handle_call({:parse_response, raw_response}, _from, state) do
@@ -108,16 +111,16 @@ defmodule Membrane.RTSP do
     end
   end
 
-  @impl true
-  # this might be a message for transport layer. Redirect
-  def handle_info(msg, %State{} = state) do
-    state.transport_module.handle_info(msg, state.transport)
-    |> translate(:transport, state)
-  end
+  # @impl true
+  # # this might be a message for transport layer. Redirect
+  # def handle_info(msg, %State{} = state) do
+  #   TCPSocket.handle_info(msg, state.transport)
+  #   |> translate(:transport, state)
+  # end
 
   @impl true
   def terminate(_reason, state) do
-    state.transport_module.close(state.transport)
+    TCPSocket.close(state.socket)
   end
 
   @spec request(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: Response.result()
@@ -135,19 +138,19 @@ defmodule Membrane.RTSP do
   @spec close(pid()) :: :ok
   def close(session), do: GenServer.cast(session, :terminate)
 
-  defp translate({action, new_state}, key, state) do
-    {action, Map.put(state, key, new_state)}
-  end
+  # defp translate({action, new_state}, key, state) do
+  #   {action, Map.put(state, key, new_state)}
+  # end
 
-  defp translate({action, reply, new_state}, key, state) do
-    {action, reply, Map.put(state, key, new_state)}
-  end
+  # defp translate({action, reply, new_state}, key, state) do
+  #   {action, reply, Map.put(state, key, new_state)}
+  # end
 
   @type headers :: [{binary(), binary()}]
 
-  @spec get_transport(t()) :: any()
-  def get_transport(session) do
-    GenServer.call(session, :get_transport)
+  @spec get_socket_control(t(), pid()) :: :gen_tcp.socket()
+  def get_socket_control(session, new_controlling_process) do
+    GenServer.call(session, {:get_socket_control, new_controlling_process})
   end
 
   @spec get_parameter_no_response(t(), headers(), binary()) :: :ok

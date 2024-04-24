@@ -2,12 +2,12 @@ defmodule Membrane.RTSP.Logic do
   @moduledoc """
   Logic for RTSP session
   """
-  alias Membrane.RTSP.{Request, Response}
+  alias Membrane.RTSP.{Request, Response, TCPSocket}
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
     @moduledoc "Struct representing the state of RTSP session"
-    @enforce_keys [:transport, :uri, :transport_module]
+    @enforce_keys [:socket, :uri]
     defstruct @enforce_keys ++
                 [
                   :session_id,
@@ -24,7 +24,7 @@ defmodule Membrane.RTSP.Logic do
     @type auth_t() :: nil | :basic | {:digest, digest_opts()}
 
     @type t :: %__MODULE__{
-            transport: any(),
+            socket: :gen_tcp.socket(),
             cseq: non_neg_integer(),
             uri: URI.t(),
             session_id: binary() | nil,
@@ -41,8 +41,7 @@ defmodule Membrane.RTSP.Logic do
   def execute(request, state, get_response \\ true) do
     %State{
       cseq: cseq,
-      transport: transport,
-      transport_module: transport_module,
+      socket: socket,
       uri: uri,
       session_id: session_id,
       execution_options: execution_options
@@ -55,7 +54,7 @@ defmodule Membrane.RTSP.Logic do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> transport_module.execute(transport, execution_options ++ [get_response: get_response])
+    |> TCPSocket.execute(socket, execution_options ++ [get_response: get_response])
   end
 
   @spec inject_session_header(Request.t(), binary()) :: Request.t()
