@@ -84,8 +84,10 @@ defmodule Membrane.RTSP do
         _from,
         %State{socket: socket} = state
       ) do
-    :ok = :gen_tcp.controlling_process(socket, new_controlling_process)
-    {:reply, socket, state}
+    case :gen_tcp.controlling_process(socket, new_controlling_process) do
+      :ok -> {:reply, {:ok, socket}, state}
+      {:error, :not_owner} -> {:reply, {:error, :not_owner}, state}
+    end
   end
 
   def handle_call({:parse_response, raw_response}, _from, state) do
@@ -148,7 +150,7 @@ defmodule Membrane.RTSP do
 
   @type headers :: [{binary(), binary()}]
 
-  @spec get_socket_control(t(), pid()) :: :gen_tcp.socket()
+  @spec get_socket_control(t(), pid()) :: {:ok, :gen_tcp.socket()} | {:error, :not_owner}
   def get_socket_control(session, new_controlling_process) do
     GenServer.call(session, {:get_socket_control, new_controlling_process})
   end
