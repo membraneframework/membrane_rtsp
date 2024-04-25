@@ -1,6 +1,6 @@
 defmodule Membrane.RTSP.TCPSocket do
   @moduledoc """
-  This module implements the Transport behaviour and transmits requests over TCP
+  This module transmits requests over TCP
   Socket keeping connection until either session is closed or connection is
   closed by server.
 
@@ -13,17 +13,9 @@ defmodule Membrane.RTSP.TCPSocket do
   @connection_timeout 1000
   @response_timeout 5000
 
-  def init(%URI{} = connection_info, options \\ []) do
+  def connect(%URI{host: host, port: port}, options \\ []) do
     connection_timeout = options[:connection_timeout] || @connection_timeout
 
-    with {:ok, socket} <- open(connection_info, connection_timeout) do
-      {:ok, socket}
-    else
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp open(%URI{host: host, port: port}, connection_timeout) do
     mockable(:gen_tcp).connect(
       to_charlist(host),
       port,

@@ -55,7 +55,7 @@ defmodule Membrane.RTSP do
         %URI{userinfo: info} when is_binary(info) -> :basic
       end
 
-    with {:ok, socket} <- TCPSocket.init(url, options) do
+    with {:ok, socket} <- TCPSocket.connect(url, options) do
       state = %State{
         socket: socket,
         uri: url,
@@ -114,13 +114,6 @@ defmodule Membrane.RTSP do
     end
   end
 
-  # @impl true
-  # # this might be a message for transport layer. Redirect
-  # def handle_info(msg, %State{} = state) do
-  #   TCPSocket.handle_info(msg, state.transport)
-  #   |> translate(:transport, state)
-  # end
-
   @impl true
   def terminate(_reason, state) do
     TCPSocket.close(state.socket)
@@ -141,20 +134,9 @@ defmodule Membrane.RTSP do
   @spec close(pid()) :: :ok
   def close(session), do: GenServer.cast(session, :terminate)
 
-  # defp translate({action, new_state}, key, state) do
-  #   {action, Map.put(state, key, new_state)}
-  # end
-
-  # defp translate({action, reply, new_state}, key, state) do
-  #   {action, reply, Map.put(state, key, new_state)}
-  # end
-
-  @type headers :: [{binary(), binary()}]
-
   @spec transfer_socket_control(t(), pid()) ::
           :ok | {:error, :closed | :not_owner | :badarg | :inet.posix()}
   def transfer_socket_control(session, new_controlling_process) do
-    IO.inspect("passing control")
     GenServer.call(session, {:transfer_socket_control, new_controlling_process})
   end
 
@@ -162,6 +144,8 @@ defmodule Membrane.RTSP do
   def get_socket(session) do
     GenServer.call(session, :get_socket)
   end
+
+  @type headers :: [{binary(), binary()}]
 
   @spec get_parameter_no_response(t(), headers(), binary()) :: :ok
   def get_parameter_no_response(session, headers \\ [], body \\ ""),
