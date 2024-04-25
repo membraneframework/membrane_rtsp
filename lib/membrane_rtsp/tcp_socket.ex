@@ -13,7 +13,8 @@ defmodule Membrane.RTSP.TCPSocket do
   @connection_timeout 1000
   @response_timeout 5000
 
-  @spec connect(URI.t(), nil | maybe_improper_list() | map()) :: any()
+  @spec connect(URI.t(), Keyword.t()) ::
+          {:ok, :gen_tcp.socket()} | {:error, :timeout | :inet.posix()}
   def connect(%URI{host: host, port: port}, options \\ []) do
     connection_timeout = options[:connection_timeout] || @connection_timeout
 
@@ -34,6 +35,7 @@ defmodule Membrane.RTSP.TCPSocket do
     end
   end
 
+  @spec close(:gen_tcp.socket()) :: :ok
   def close(socket) do
     :gen_tcp.close(socket)
   end
