@@ -114,7 +114,7 @@ defmodule Membrane.RTSP do
         {:noreply, %State{state | cseq: cseq + 1}}
 
       {:error, reason} ->
-        raise "Error: #{reason}"
+        raise "Error executing request #{inspect(request)}, reason: #{inspect(reason)}"
     end
   end
 
