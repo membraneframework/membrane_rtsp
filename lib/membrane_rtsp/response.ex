@@ -181,7 +181,11 @@ defmodule Membrane.RTSP.Response do
   @spec parse_start_line(raw_response :: binary()) ::
           {:ok, {response :: t(), remainder :: binary}} | {:error, :invalid_start_line}
   defp parse_start_line(binary) do
-    [line, rest] = String.split(binary, @line_ending, parts: 2)
+    {line, rest} =
+      case String.split(binary, @line_ending, parts: 2) do
+        [line] -> {line, ""}
+        [line, rest] -> {line, rest}
+      end
 
     case Regex.run(@start_line_regex, line) do
       [_match, version, code] ->
