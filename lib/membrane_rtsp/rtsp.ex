@@ -79,6 +79,7 @@ defmodule Membrane.RTSP do
     end
   end
 
+  @impl true
   def handle_call(
         {:transfer_socket_control, new_controlling_process},
         _from,
@@ -87,10 +88,12 @@ defmodule Membrane.RTSP do
     {:reply, :gen_tcp.controlling_process(socket, new_controlling_process), state}
   end
 
+  @impl true
   def handle_call(:get_socket, _from, %State{socket: socket} = state) do
     {:reply, socket, state}
   end
 
+  @impl true
   def handle_call({:parse_response, raw_response}, _from, state) do
     with {:ok, response, state} <- parse_response(raw_response, state) do
       {:reply, {:ok, response}, state}
@@ -104,6 +107,7 @@ defmodule Membrane.RTSP do
     {:stop, :normal, state}
   end
 
+  @impl true
   def handle_cast({:execute, request}, %State{cseq: cseq} = state) do
     case execute(request, state, false) do
       :ok ->
@@ -112,6 +116,11 @@ defmodule Membrane.RTSP do
       {:error, reason} ->
         raise "Error: #{reason}"
     end
+  end
+
+  @impl true
+  def handle_info({:tcp_closed, _socket}, state) do
+    {:stop, :socket_closed, state}
   end
 
   @impl true
