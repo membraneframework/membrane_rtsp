@@ -4,7 +4,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
   import Mockery
 
   alias Membrane.RTSP
-  alias Membrane.RTSP.Logic.State
+  alias Membrane.RTSP.State
   alias Membrane.RTSP.{Request, TCPSocket}
 
   @response_header "RTSP/1.0 200 OK\r\n"
@@ -12,12 +12,13 @@ defmodule Membrane.RTSP.SessionLogicTest do
   setup_all do
     uri = "rtsp://localhost:5554/vod/mp4:name.mov" |> URI.parse()
     mock(:gen_tcp, :connect, {:ok, nil})
-    {:ok, socket} = TCPSocket.connect(uri)
+    {:ok, socket} = TCPSocket.connect(uri, 500)
 
     state = %State{
       socket: socket,
       cseq: 0,
       uri: uri,
+      response_timeout: 500,
       session_id: "fake_session"
     }
 
@@ -49,9 +50,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       mock(:gen_tcp, [send: 2], fn _socket, _request ->
         {:error, :timeout}
       end)
-
-      # resolver = fn _request -> {:error, :timeout} end
-      # state = %State{state | execution_options: [resolver: resolver]}
 
       {:reply, {:error, :timeout}, ^state} =
         RTSP.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
@@ -136,8 +134,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       {:ok,
        "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"realm\", nonce=\"nonce\"\r\n\r\n"}
     end)
-
-    # state = %State{state | execution_options: [resolver: resolver]}
 
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 

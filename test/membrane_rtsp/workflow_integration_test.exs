@@ -57,7 +57,7 @@ defmodule Membrane.RTSP.WorkflowIntegrationTest do
   end
 
   defp request_mappings do
-    user_agent = Membrane.RTSP.Logic.user_agent()
+    user_agent = Membrane.RTSP.user_agent()
 
     [
       {"""
