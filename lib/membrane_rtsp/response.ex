@@ -125,12 +125,11 @@ defmodule Membrane.RTSP.Response do
         {:error, content_length, body_size}
       end
     else
+      {:error, :no_such_header} when byte_size(body) == 0 ->
+        {:ok, 0, 0}
+
       {:error, :no_such_header} ->
-        if byte_size(body) == 0 do
-          {:ok, 0, 0}
-        else
-          {:error, 0, byte_size(body)}
-        end
+        {:error, 0, byte_size(body)}
 
       _other ->
         {:error, 0, 0}
