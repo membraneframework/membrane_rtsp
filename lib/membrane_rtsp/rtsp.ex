@@ -1,5 +1,7 @@
 defmodule Membrane.RTSP do
-  @moduledoc "RTSP Session"
+  @moduledoc """
+  Functions for interfacing with a RTSP session
+  """
   use GenServer
 
   alias Membrane.RTSP
@@ -30,14 +32,14 @@ defmodule Membrane.RTSP do
             nonce: String.t() | nil
           }
 
-    @type auth_t() :: nil | :basic | {:digest, digest_opts()}
+    @type auth() :: nil | :basic | {:digest, digest_opts()}
 
     @type t :: %__MODULE__{
             socket: :gen_tcp.socket(),
             cseq: non_neg_integer(),
             uri: URI.t(),
             session_id: binary() | nil,
-            auth: auth_t(),
+            auth: auth(),
             response_timeout: non_neg_integer()
           }
   end
@@ -56,7 +58,7 @@ defmodule Membrane.RTSP do
   end
 
   @doc """
-  Same as start_link/2, but doesn't link the process.
+  Same as start_link/2, but doesn't link the session process.
   """
   @spec start(binary() | URI.t(), Keyword.t()) :: GenServer.on_start()
   def start(url, options \\ []) do
@@ -136,18 +138,8 @@ defmodule Membrane.RTSP do
   @spec teardown(t(), headers()) :: Response.result()
   def teardown(session, headers \\ []), do: request(session, "TEARDOWN", headers)
 
-  defp do_start(url, options, start_fun) do
-    case URI.parse(url) do
-      %URI{host: host, scheme: "rtsp"} = url when is_binary(host) ->
-        start_fun.(__MODULE__, %{
-          url: %URI{url | port: url.port || @default_rtsp_port},
-          options: options
-        })
-
-      _else ->
-        {:error, :invalid_url}
-    end
-  end
+  @spec user_agent() :: binary()
+  def user_agent(), do: @user_agent
 
   @impl true
   def init(%{url: url, options: options}) do
@@ -232,8 +224,20 @@ defmodule Membrane.RTSP do
     TCPSocket.close(state.socket)
   end
 
-  @spec user_agent() :: binary()
-  def user_agent(), do: @user_agent
+  @spec do_start(URI.t(), options(), (module(), any() -> GenServer.on_start())) ::
+          GenServer.on_start()
+  defp do_start(url, options, start_fun) do
+    case URI.parse(url) do
+      %URI{host: host, scheme: "rtsp"} = url when is_binary(host) ->
+        start_fun.(__MODULE__, %{
+          url: %URI{url | port: url.port || @default_rtsp_port},
+          options: options
+        })
+
+      _else ->
+        {:error, :invalid_url}
+    end
+  end
 
   @spec execute(Request.t(), State.t(), boolean()) ::
           :ok | {:ok, binary()} | {:error, reason :: any()}
@@ -272,7 +276,7 @@ defmodule Membrane.RTSP do
     end
   end
 
-  @spec apply_credentials(Request.t(), URI.t(), State.auth_t()) :: Request.t()
+  @spec apply_credentials(Request.t(), URI.t(), State.auth()) :: Request.t()
   defp apply_credentials(request, %URI{userinfo: nil}, _auth_options), do: request
 
   defp apply_credentials(%Request{headers: headers} = request, uri, auth) do
@@ -296,6 +300,7 @@ defmodule Membrane.RTSP do
     end
   end
 
+  @spec do_apply_credentials(Request.t(), URI.t(), State.auth()) :: Request.t()
   defp do_apply_credentials(request, %URI{userinfo: info}, :basic) do
     encoded = Base.encode64(info)
     Request.with_header(request, "Authorization", "Basic " <> encoded)
