@@ -99,12 +99,13 @@ defmodule Membrane.RTSP.Response do
   `{:ok, 512, 512}` - `Content-Length` header value and body size matched. A response is complete.
   `{:ok, 0, 0}` - `Content-Length` header missing or set to 0 and no body. A response is complete.
   `{:error, 512, 123}` - Missing part of body in response.
+  `{:error, 512, 623}` - Body in response longer than expected.
   `{:error, 512, 0}` - Missing whole body in response.
-  `{:error, 0, 0}` - Missing part of header or missing delimiter at the and of header part.
+  `{:error, 0, 123}` - Body is present despite not being expected.
+  `{:error, 0, 0}` - Missing part of header or missing delimiter at the end of the header part.
   """
   @spec verify_content_length(binary()) ::
-          {:ok, non_neg_integer(), non_neg_integer()}
-          | {:error, non_neg_integer(), non_neg_integer()}
+          {:ok | :error, expected_size :: non_neg_integer(), actual_size :: non_neg_integer()}
   def verify_content_length(response) do
     split_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
     headers = Enum.at(split_response, 0)
@@ -114,9 +115,9 @@ defmodule Membrane.RTSP.Response do
          {:ok, headers} <- parse_headers(headers),
          false <- is_nil(body),
          body_size <- byte_size(body),
-         {:ok, content_legth_str} <-
+         {:ok, content_length_str} <-
            get_header(%__MODULE__{response | headers: headers}, "Content-Length") do
-      {content_length, _remainder} = Integer.parse(content_legth_str)
+      {content_length, _remainder} = Integer.parse(content_length_str)
 
       if body_size == content_length do
         {:ok, content_length, body_size}
@@ -124,12 +125,11 @@ defmodule Membrane.RTSP.Response do
         {:error, content_length, body_size}
       end
     else
+      {:error, :no_such_header} when byte_size(body) == 0 ->
+        {:ok, 0, 0}
+
       {:error, :no_such_header} ->
-        if byte_size(body) == 0 do
-          {:ok, 0, 0}
-        else
-          {:error, 0, 0}
-        end
+        {:error, 0, byte_size(body)}
 
       _other ->
         {:error, 0, 0}
@@ -180,7 +180,11 @@ defmodule Membrane.RTSP.Response do
   @spec parse_start_line(raw_response :: binary()) ::
           {:ok, {response :: t(), remainder :: binary}} | {:error, :invalid_start_line}
   defp parse_start_line(binary) do
-    [line, rest] = String.split(binary, @line_ending, parts: 2)
+    {line, rest} =
+      case String.split(binary, @line_ending, parts: 2) do
+        [line] -> {line, ""}
+        [line, rest] -> {line, rest}
+      end
 
     case Regex.run(@start_line_regex, line) do
       [_match, version, code] ->
