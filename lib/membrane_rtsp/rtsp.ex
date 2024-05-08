@@ -93,6 +93,10 @@ defmodule Membrane.RTSP do
 
   @type headers :: [{binary(), binary()}]
 
+  @spec handle_response(t(), binary()) :: Response.result()
+  def handle_response(session, raw_response),
+    do: GenServer.call(session, {:parse_response, raw_response})
+
   @spec get_parameter_no_response(t(), headers(), binary()) :: :ok
   def get_parameter_no_response(session, headers \\ [], body \\ ""),
     do: request_no_response(session, "GET_PARAMETER", headers, body)
@@ -100,10 +104,6 @@ defmodule Membrane.RTSP do
   @spec play_no_response(t(), headers()) :: :ok
   def play_no_response(session, headers \\ []),
     do: request_no_response(session, "PLAY", headers, "")
-
-  @spec handle_response(t(), binary()) :: Response.result()
-  def handle_response(session, raw_response),
-    do: GenServer.call(session, {:parse_response, raw_response})
 
   @spec describe(t(), headers()) :: Response.result()
   def describe(session, headers \\ []), do: request(session, "DESCRIBE", headers, "")
