@@ -45,12 +45,7 @@ defmodule Membrane.RTSP do
   end
 
   @doc """
-  Starts and links session process.
-
-  Sets following properties of Session:
-    * url - a base path for requests
-    * options - a keyword list that shall be passed when executing request over
-    transport
+  Starts and links session process with given URL as a base path for requests.
   """
   @spec start_link(binary() | URI.t(), options()) :: GenServer.on_start()
   def start_link(url, options \\ []) do
