@@ -1,8 +1,5 @@
 defmodule Membrane.RTSP.Server.Conn do
-  @moduledoc """
-  A module representing a client-server connection
-  """
-
+  @moduledoc false
   use GenServer
 
   require Logger

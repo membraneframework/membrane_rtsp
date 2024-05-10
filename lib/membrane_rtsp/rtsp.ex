@@ -17,7 +17,7 @@ defmodule Membrane.RTSP do
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
-    @moduledoc "Struct representing the state of RTSP session"
+    @moduledoc false
     @enforce_keys [:socket, :uri]
     defstruct @enforce_keys ++
                 [
@@ -131,6 +131,7 @@ defmodule Membrane.RTSP do
     do: request(session, "SET_PARAMETER", headers, body)
 
   @spec teardown(t(), headers()) :: Response.result()
+  @spec teardown(pid()) :: {:error, atom()} | {:ok, Membrane.RTSP.Response.t()}
   def teardown(session, headers \\ []), do: request(session, "TEARDOWN", headers)
 
   @spec user_agent() :: binary()
