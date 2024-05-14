@@ -4,19 +4,18 @@ defmodule Membrane.RTSP.IntegrationTest do
 
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response}
-  alias Membrane.RTSP.Transport.TCPSocket
 
   @uri "rtsp://wowzaec2demo.streamlock.net:554/vod/mp4:BigBuckBunny_115k.mov"
 
   describe "Session works in combination with" do
     @tag external: true
     test "real transport" do
-      integration_test(@uri, TCPSocket)
+      integration_test(@uri)
     end
   end
 
-  defp integration_test(uri, transport, options \\ []) do
-    {:ok, pid} = RTSP.start_link(uri, transport, options)
+  defp integration_test(uri, options \\ []) do
+    {:ok, pid} = RTSP.start_link(uri, options)
 
     request = %Request{
       method: "DESCRIBE",

@@ -1,8 +1,5 @@
 defmodule Membrane.RTSP.Server.Logic do
-  @moduledoc """
-  Logic for RTSP Server
-  """
-
+  @moduledoc false
   import Mockery.Macro
 
   alias Membrane.RTSP.{Request, Response, Server}
@@ -11,7 +8,7 @@ defmodule Membrane.RTSP.Server.Logic do
   @allowed_methods ["GET_PARAMETER", "OPTIONS", "DESCRIBE", "SETUP", "PLAY", "PAUSE", "TEARDOWN"]
 
   defmodule State do
-    @moduledoc "Struct representing the state of a server connection"
+    @moduledoc false
     @enforce_keys [:socket, :request_handler]
     defstruct @enforce_keys ++
                 [

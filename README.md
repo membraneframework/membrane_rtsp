@@ -59,13 +59,6 @@ by calling:
 RTSP.close(session)
 ```
 
-
-## Implementing a custom transport layer
-
-To implement custom request execution logic you must implement
-`Membrane.RTSP.Transport` behavior. Then you can pass
-the name of your transport module to `Membrane.RTSP.start_link/3`.
-
 ## External tests
 
 Tests that use external RTSP service are disabled by default but they are present
