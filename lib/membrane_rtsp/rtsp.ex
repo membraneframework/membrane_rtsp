@@ -220,7 +220,7 @@ defmodule Membrane.RTSP do
     TCPSocket.close(state.socket)
   end
 
-  @spec do_start(URI.t(), options(), (module(), any() -> GenServer.on_start())) ::
+  @spec do_start(binary() | URI.t(), options(), (module(), any() -> GenServer.on_start())) ::
           GenServer.on_start()
   defp do_start(url, options, start_fun) do
     case URI.parse(url) do
