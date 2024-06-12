@@ -24,7 +24,8 @@ defmodule Membrane.RTSP do
                   :response_timeout,
                   :session_id,
                   cseq: 0,
-                  auth: nil
+                  auth: nil,
+                  last_request: nil
                 ]
 
     @type digest_opts() :: %{
@@ -40,7 +41,8 @@ defmodule Membrane.RTSP do
             uri: URI.t(),
             session_id: binary() | nil,
             auth: auth(),
-            response_timeout: non_neg_integer()
+            response_timeout: non_neg_integer(),
+            last_request: Request.t() | nil
           }
   end
 
@@ -131,8 +133,13 @@ defmodule Membrane.RTSP do
     do: request(session, "SET_PARAMETER", headers, body)
 
   @spec teardown(t(), headers()) :: Response.result()
-  @spec teardown(pid()) :: {:error, atom()} | {:ok, Membrane.RTSP.Response.t()}
   def teardown(session, headers \\ []), do: request(session, "TEARDOWN", headers)
+
+  @spec repeat_last_request(t()) :: Response.result()
+  def repeat_last_request(session), do: GenServer.call(session, :repeat_last_request)
+
+  @spec repeat_last_request_no_response(t()) :: :ok
+  def repeat_last_request_no_response(session), do: GenServer.cast(session, :repeat_last_request)
 
   @spec user_agent() :: binary()
   def user_agent(), do: @user_agent
@@ -163,12 +170,19 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_call({:execute, request}, _from, state) do
+    state = %{state | cseq: state.cseq + 1, last_request: request}
+
     with {:ok, raw_response} <- execute(request, state),
          {:ok, response, state} <- parse_response(raw_response, state) do
       {:reply, {:ok, response}, state}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
+  end
+
+  @impl true
+  def handle_call(:repeat_last_request, from, state) do
+    handle_call({:execute, state.last_request}, from, state)
   end
 
   @impl true
@@ -200,13 +214,26 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_cast({:execute, request}, %State{cseq: cseq} = state) do
+  def handle_cast({:execute, request}, state) do
+    state = %{state | cseq: state.cseq + 1, last_request: request}
+
     case execute(request, state, false) do
       :ok ->
-        {:noreply, %State{state | cseq: cseq + 1}}
+        {:noreply, state}
 
       {:error, reason} ->
         raise "Error executing request #{inspect(request)}, reason: #{inspect(reason)}"
+    end
+  end
+
+  @impl true
+  def handle_cast(:repeat_last_request, state) do
+    case state.last_request do
+      nil ->
+        raise "The last request cannot be repeated as no requests have been previously executed"
+
+      last_request ->
+        handle_cast({:execute, last_request}, state)
     end
   end
 
