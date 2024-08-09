@@ -41,7 +41,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
       assert {:reply, {:ok, _response}, next_state} =
                RTSP.handle_call({:execute, request}, nil, state)
 
-      assert next_state == %State{state | cseq: state.cseq + 1}
+      assert next_state == %State{state | cseq: state.cseq + 1, last_request: request}
     end
 
     test "returns an error if response has different session", %{
@@ -51,8 +51,11 @@ defmodule Membrane.RTSP.SessionLogicTest do
         {:error, :timeout}
       end)
 
-      {:reply, {:error, :timeout}, ^state} =
-        RTSP.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
+      request = %Request{method: "OPTIONS"}
+      new_state = %State{state | last_request: request}
+
+      assert {:reply, {:error, :timeout}, ^new_state} =
+               RTSP.handle_call({:execute, request}, nil, state)
     end
 
     test "preserves session_id", %{request: request, state: state} do

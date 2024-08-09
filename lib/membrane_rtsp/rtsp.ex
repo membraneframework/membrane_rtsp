@@ -170,7 +170,7 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_call({:execute, request}, _from, state) do
-    state = %{state | cseq: state.cseq + 1, last_request: request}
+    state = %{state | last_request: request}
 
     with {:ok, raw_response} <- execute(request, state),
          {:ok, response, state} <- parse_response(raw_response, state) do
@@ -215,7 +215,7 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_cast({:execute, request}, state) do
-    state = %{state | cseq: state.cseq + 1, last_request: request}
+    state = %{state | last_request: request}
 
     case execute(request, state, false) do
       :ok ->
