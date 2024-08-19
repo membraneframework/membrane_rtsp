@@ -11,7 +11,7 @@ defmodule Membrane.RTSP.TCPSocket do
     mockable(:gen_tcp).connect(
       to_charlist(host),
       port,
-      [:binary, active: false],
+      [:binary, active: true],
       connection_timeout || @connection_timeout
     )
   end
@@ -19,9 +19,15 @@ defmodule Membrane.RTSP.TCPSocket do
   @spec execute(binary(), :gen_tcp.socket(), non_neg_integer() | nil, boolean()) ::
           :ok | {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
   def execute(request, socket, response_timeout, true = _get_response) do
-    with :ok <- mockable(:gen_tcp).send(socket, request) do
-      recv(socket, response_timeout)
-    end
+    if is_port(socket), do: :inet.setopts(socket, active: false)
+
+    result =
+      with :ok <- mockable(:gen_tcp).send(socket, request) do
+        recv(socket, response_timeout)
+      end
+
+    if is_port(socket), do: :inet.setopts(socket, active: true)
+    result
   end
 
   def execute(request, socket, _response_timeout, false = _get_response) do
