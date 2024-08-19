@@ -4,6 +4,7 @@ defmodule Membrane.RTSP do
   """
   use GenServer
 
+  require Logger
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response, TCPSocket}
 
@@ -235,6 +236,12 @@ defmodule Membrane.RTSP do
       last_request ->
         handle_cast({:execute, last_request}, state)
     end
+  end
+
+  @impl true
+  def handle_info({:tcp, _socket, data}, state) do
+    Logger.warning("Received an unexpected packet, ignoring: #{inspect(data)}")
+    {:noreply, state}
   end
 
   @impl true
