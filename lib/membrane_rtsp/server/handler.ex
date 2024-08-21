@@ -180,6 +180,8 @@ defmodule Membrane.RTSP.Server.Handler do
 
       @impl true
       def init(config), do: config
+
+      defoverridable init: 1
     end
   end
 end
