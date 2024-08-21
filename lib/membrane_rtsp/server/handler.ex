@@ -64,6 +64,10 @@ defmodule Membrane.RTSP.Server.Handler do
   > `GET_PARAMETER` is used to keep the session alive and the server is responsible for setting session timeout
   >
   > The other methods are not yet implemented.
+
+  ## `use Membrane.RTSP.Server.Handler` {: info}
+  When you `use Membrane.RTSP.Server.Handler`, the module will set `@behaviour Membrane.RTSP.Server.Handler` and
+  define the default implementation for `init/1` callback.
   """
 
   alias Membrane.RTSP.{Request, Response}
@@ -72,6 +76,7 @@ defmodule Membrane.RTSP.Server.Handler do
   Any term that will be used to keep state between the callbacks.
   """
   @type state :: term()
+  @type config :: term()
   @type control_path :: binary()
   @type ssrc :: non_neg_integer()
   @type conn :: :inet.socket()
@@ -106,12 +111,20 @@ defmodule Membrane.RTSP.Server.Handler do
         }
 
   @doc """
-  Callback called when a new connection is established.
+  Optional callback called when the server is initialized.
 
-  The returned value is used as a state and is passed as the last argument to
-  the subsequent callbacks
+  The argument is a term passed to the server as the `handler_config` option. 
+  The returned value will be used as a state and passed as the last 
+  argument to the subsequent callbacks.
+
+  Default behavior is to return the argument unchanged.
   """
-  @callback handle_open_connection(conn()) :: state()
+  @callback init(config()) :: state()
+
+  @doc """
+  Callback called when a new connection is established.
+  """
+  @callback handle_open_connection(conn(), state()) :: state()
 
   @doc """
   Callback called when a connection is closed.
@@ -160,4 +173,13 @@ defmodule Membrane.RTSP.Server.Handler do
   the session.
   """
   @callback handle_teardown(state()) :: {Response.t(), state()}
+
+  defmacro __using__(_options) do
+    quote do
+      @behavior unquote(__MODULE__)
+
+      @impl true
+      def init(config), do: config
+    end
+  end
 end
