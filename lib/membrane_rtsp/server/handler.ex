@@ -174,6 +174,8 @@ defmodule Membrane.RTSP.Server.Handler do
   """
   @callback handle_teardown(state()) :: {Response.t(), state()}
 
+  @optional_callbacks init: 1
+
   defmacro __using__(_options) do
     quote do
       @behaviour unquote(__MODULE__)
