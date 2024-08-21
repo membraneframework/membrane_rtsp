@@ -176,7 +176,7 @@ defmodule Membrane.RTSP.Server.Handler do
 
   defmacro __using__(_options) do
     quote do
-      @behavior unquote(__MODULE__)
+      @behaviour unquote(__MODULE__)
 
       @impl true
       def init(config), do: config
