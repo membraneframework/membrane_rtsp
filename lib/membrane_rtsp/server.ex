@@ -139,7 +139,7 @@ defmodule Membrane.RTSP.Server do
   def handle_info({:new_connection, client_socket}, state) do
     child_state =
       state
-      |> Map.take([:handler, :session_timeout, :udp_rtp_socket, :udp_rtcp_socket])
+      |> Map.take([:handler, :handler_state, :session_timeout, :udp_rtp_socket, :udp_rtcp_socket])
       |> Map.put(:socket, client_socket)
 
     case Conn.start(child_state) do
