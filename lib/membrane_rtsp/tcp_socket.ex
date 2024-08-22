@@ -19,14 +19,14 @@ defmodule Membrane.RTSP.TCPSocket do
   @spec execute(binary(), :gen_tcp.socket(), non_neg_integer() | nil, boolean()) ::
           :ok | {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
   def execute(request, socket, response_timeout, true = _get_response) do
-    if is_port(socket), do: :inet.setopts(socket, active: false)
+    :inet.setopts(socket, active: false)
 
     result =
       with :ok <- mockable(:gen_tcp).send(socket, request) do
         recv(socket, response_timeout)
       end
 
-    if is_port(socket), do: :inet.setopts(socket, active: true)
+    :inet.setopts(socket, active: true)
     result
   end
 
