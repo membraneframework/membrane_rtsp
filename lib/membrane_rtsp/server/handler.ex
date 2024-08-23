@@ -53,7 +53,7 @@ defmodule Membrane.RTSP.Server.Handler do
 
   ## State
   The handler may need to keep some state between the callback calls. To achieve this, the returned value from
-  `c:handle_open_connection/1` callback will be used as a state and will be the last argument for the other callbacks.
+  `c:init/1` callback will be used as a state and will be the last argument for the other callbacks.
 
   > #### `Missing callbacks in the handler` {: .info}
   >
@@ -65,7 +65,7 @@ defmodule Membrane.RTSP.Server.Handler do
   >
   > The other methods are not yet implemented.
 
-  ## `use Membrane.RTSP.Server.Handler` {: info}
+  ## `use Membrane.RTSP.Server.Handler` {: .info}
   When you `use Membrane.RTSP.Server.Handler`, the module will set `@behaviour Membrane.RTSP.Server.Handler` and
   define the default implementation for `init/1` callback.
   """
