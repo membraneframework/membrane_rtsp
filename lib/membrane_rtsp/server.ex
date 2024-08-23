@@ -28,15 +28,16 @@ defmodule Membrane.RTSP.Server do
 
   alias __MODULE__.Conn
 
-  @type server_config :: [
-          handler: module(),
-          name: term(),
-          port: :inet.port_number(),
-          address: :inet.ip_address(),
-          udp_rtp_port: :inet.port_number(),
-          udp_rtcp_port: :inet.port_number(),
-          session_timeout: non_neg_integer()
-        ]
+  @type server_option ::
+          {:handler, module()}
+          | {:handler_config, term()}
+          | {:name, term()}
+          | {:port, :inet.port_number()}
+          | {:address, :inet.ip_address()}
+          | {:udp_rtp_port, :inet.port_number()}
+          | {:udp_rtcp_port, :inet.port_number()}
+          | {:session_timeout, non_neg_integer()}
+  @type server_config :: [server_option()]
 
   @doc """
   Start an instance of the RTSP server.
@@ -54,6 +55,7 @@ defmodule Membrane.RTSP.Server do
   ## Options
     - `handler` - An implementation of the behaviour `Membrane.RTSP.Server.Handler`. Refer to the module
     documentation for more details. This field is required.
+    - `handler_config` - Term that will be passed as an argument to `init/1` callback of the handler. Defaults to `nil`.
     - `name` - Used for name registration of the server. Defaults to `nil`.
     - `port` - The port where the server will listen for client connections. Defaults to: `554`
     - `address` - Specify the address where the `tcp` and `udp` sockets will be bound. Defaults to `:any`.
@@ -115,6 +117,7 @@ defmodule Membrane.RTSP.Server do
     state = %{
       socket: socket,
       handler: config[:handler],
+      handler_state: config[:handler].init(config[:handler_config]),
       udp_rtp_socket: udp_rtp_socket,
       udp_rtcp_socket: udp_rtcp_socket,
       client_conns: %{},
@@ -136,7 +139,7 @@ defmodule Membrane.RTSP.Server do
   def handle_info({:new_connection, client_socket}, state) do
     child_state =
       state
-      |> Map.take([:handler, :session_timeout, :udp_rtp_socket, :udp_rtcp_socket])
+      |> Map.take([:handler, :handler_state, :session_timeout, :udp_rtp_socket, :udp_rtcp_socket])
       |> Map.put(:socket, client_socket)
 
     case Conn.start(child_state) do

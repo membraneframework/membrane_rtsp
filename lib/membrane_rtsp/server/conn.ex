@@ -18,7 +18,8 @@ defmodule Membrane.RTSP.Server.Conn do
     state = %Logic.State{
       socket: config.socket,
       request_handler: config.handler,
-      request_handler_state: config.handler.handle_open_connection(config.socket),
+      request_handler_state:
+        config.handler.handle_open_connection(config.socket, config.handler_state),
       rtp_socket: config.udp_rtp_socket,
       rtcp_socket: config.udp_rtcp_socket,
       session_timeout: config.session_timeout
