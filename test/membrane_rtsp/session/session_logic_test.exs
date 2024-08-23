@@ -11,7 +11,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
   setup_all do
     uri = "rtsp://localhost:5554/vod/mp4:name.mov" |> URI.parse()
-    mock(:gen_tcp, :connect, {:ok, nil})
+    mock(:gen_tcp, :connect, :gen_tcp.listen(0, []))
     {:ok, socket} = TCPSocket.connect(uri, 500)
 
     state = %State{
