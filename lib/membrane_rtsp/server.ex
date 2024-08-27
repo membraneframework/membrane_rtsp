@@ -75,6 +75,14 @@ defmodule Membrane.RTSP.Server do
   end
 
   @doc """
+  Same as `GenServer.stop/2`
+  """
+  @spec stop(pid(), reason :: term(), timeout()) :: :ok
+  def stop(server, reason \\ :normal, timeout \\ :infinity) do
+    GenServer.stop(server, reason, timeout)
+  end
+
+  @doc """
   Get the port number of the server.
 
   If the server started with port number 0, the os will choose an available port to
@@ -171,11 +179,15 @@ defmodule Membrane.RTSP.Server do
     {:noreply, state}
   end
 
+  @spec do_listen(:gen_tcp.socket(), pid()) :: :ok
   defp do_listen(socket, parent_pid) do
     case :gen_tcp.accept(socket) do
       {:ok, client_socket} ->
         send(parent_pid, {:new_connection, client_socket})
         do_listen(socket, parent_pid)
+
+      {:error, :closed} ->
+        :ok
 
       {:error, reason} ->
         raise("error occurred when accepting client connection: #{inspect(reason)}")
