@@ -75,11 +75,15 @@ defmodule Membrane.RTSP.Server do
   end
 
   @doc """
-  Same as `GenServer.stop/2`
+  Stops the RTSP server.
+
+  ## Options
+    - `timeout` - timeout of the server termination, passed to `GenServer.stop/3`.
   """
-  @spec stop(pid(), reason :: term(), timeout()) :: :ok
-  def stop(server, reason \\ :normal, timeout \\ :infinity) do
-    GenServer.stop(server, reason, timeout)
+  @spec stop(pid(), timeout: timeout()) :: :ok
+  def stop(server, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, :infinity)
+    GenServer.stop(server, :normal, timeout)
   end
 
   @doc """
