@@ -76,6 +76,11 @@ defmodule Membrane.RTSP do
   @spec close(pid()) :: :ok
   def close(session), do: GenServer.cast(session, :terminate)
 
+  @doc """
+  Transfer the control of the TCP socket the session was using to a new process. For more information see `:gen_tcp.controlling_process/2`.
+  From now on the session won't try to receive responses to requests from the socket, since now an other process is controlling it. 
+  Instead of this, the session will synchronously wait for the response to be supplied with `handle_response/2`.
+  """
   @spec transfer_socket_control(t(), pid()) ::
           :ok | {:error, :closed | :not_owner | :badarg | :inet.posix()}
   def transfer_socket_control(session, new_controlling_process) do
@@ -91,7 +96,7 @@ defmodule Membrane.RTSP do
 
   @spec handle_response(t(), binary()) :: Response.result()
   def handle_response(session, raw_response),
-    do: GenServer.call(session, {:parse_response, raw_response})
+    do: send(session, {:raw_response, raw_response})
 
   @spec get_parameter_no_response(t(), headers(), binary()) :: :ok
   def get_parameter_no_response(session, headers \\ [], body \\ ""),
