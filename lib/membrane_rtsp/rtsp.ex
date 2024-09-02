@@ -5,9 +5,6 @@ defmodule Membrane.RTSP do
   use GenServer
 
   require Logger
-  alias Hex.State
-  alias Hex.State
-  alias Membrane.RTSP.Parser.Request
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response, Transport}
 
@@ -73,12 +70,6 @@ defmodule Membrane.RTSP do
     GenServer.call(session, {:execute, request}, :infinity)
   end
 
-  @spec request_no_response(pid(), binary(), RTSP.headers(), binary(), nil | binary()) :: :ok
-  def request_no_response(session, method, headers \\ [], body \\ "", path \\ nil) do
-    request = %Request{method: method, headers: headers, body: body, path: path}
-    GenServer.cast(session, {:execute, request})
-  end
-
   @spec close(pid()) :: :ok
   def close(session), do: GenServer.cast(session, :terminate)
 
@@ -105,14 +96,6 @@ defmodule Membrane.RTSP do
   end
 
   @type headers :: [{binary(), binary()}]
-
-  @spec get_parameter_no_response(t(), headers(), binary()) :: :ok
-  def get_parameter_no_response(session, headers \\ [], body \\ ""),
-    do: request_no_response(session, "GET_PARAMETER", headers, body)
-
-  @spec play_no_response(t(), headers()) :: :ok
-  def play_no_response(session, headers \\ []),
-    do: request_no_response(session, "PLAY", headers, "")
 
   @spec describe(t(), headers()) :: Response.result()
   def describe(session, headers \\ []), do: request(session, "DESCRIBE", headers, "")
@@ -194,30 +177,10 @@ defmodule Membrane.RTSP do
     {:reply, socket, state}
   end
 
-  # @impl true
-  # def handle_call({:parse_response, raw_response}, _from, state) do
-  # with {:ok, response, state} <- parse_response(raw_response, state) do
-  # {:reply, {:ok, response}, state}
-  # else
-  # {:error, reason} -> {:reply, {:error, reason}, state}
-  # end
-  # end
-
   @impl true
   def handle_cast(:terminate, %State{} = state) do
     {:stop, :normal, state}
   end
-
-  # @impl true
-  # def handle_cast({:execute, request}, %State{cseq: cseq} = state) do
-  # case execute(request, state, false) do
-  # :ok ->
-  # {:noreply, %State{state | cseq: cseq + 1}}
-
-  # {:error, reason} ->
-  # raise "Error executing request #{inspect(request)}, reason: #{inspect(reason)}"
-  # end
-  # end
 
   @impl true
   def handle_info({:tcp, _socket, data}, state) do
