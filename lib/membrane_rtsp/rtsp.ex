@@ -5,6 +5,9 @@ defmodule Membrane.RTSP do
   use GenServer
 
   require Logger
+  alias Hex.State
+  alias Hex.State
+  alias Membrane.RTSP.Parser.Request
   alias Membrane.RTSP
   alias Membrane.RTSP.{Request, Response, Transport}
 
@@ -33,7 +36,8 @@ defmodule Membrane.RTSP do
             session_id: binary() | nil,
             auth: auth(),
             response_timeout: non_neg_integer() | nil,
-            receive_from: :socket | :external_process
+            receive_from: :socket | :external_process,
+            retries: non_neg_integer()
           }
 
     @enforce_keys [:socket, :uri, :response_timeout]
@@ -42,7 +46,8 @@ defmodule Membrane.RTSP do
                   :session_id,
                   cseq: 0,
                   auth: nil,
-                  receive_from: :socket
+                  receive_from: :socket,
+                  retries: 0
                 ]
   end
 
@@ -170,12 +175,7 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_call({:execute, request}, _from, state) do
-    with {:ok, raw_response} <- execute(request, state),
-         {:ok, response, state} <- parse_response(raw_response, state) do
-      {:reply, {:ok, response}, state}
-    else
-      {:error, reason} -> {:reply, {:error, reason}, state}
-    end
+    handle_execute_call(request, true, state)
   end
 
   @impl true
@@ -305,6 +305,23 @@ defmodule Membrane.RTSP do
          {:ok, state} <- detect_authentication_type(parsed_response, state) do
       state = %State{state | cseq: state.cseq + 1}
       {:ok, parsed_response, state}
+    end
+  end
+
+  @spec handle_execute_call(Request.t(), boolean(), State.t()) ::
+          {:reply, Response.result(), State.t()}
+  defp handle_execute_call(request, retry, state) do
+    with {:ok, raw_response} <- execute(request, state),
+         {:ok, response, state} <- parse_response(raw_response, state) do
+      case response do
+        %Response{status: 401} when retry ->
+          handle_execute_call(request, false, state)
+
+        response ->
+          {:reply, {:ok, response}, state}
+      end
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
