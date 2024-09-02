@@ -6,7 +6,7 @@ defmodule Membrane.RTSP do
 
   require Logger
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Response, TCPSocket}
+  alias Membrane.RTSP.{Request, Response, Transport}
 
   @type t() :: pid()
 
@@ -19,15 +19,6 @@ defmodule Membrane.RTSP do
 
   defmodule State do
     @moduledoc false
-    @enforce_keys [:socket, :uri]
-    defstruct @enforce_keys ++
-                [
-                  :response_timeout,
-                  :session_id,
-                  cseq: 0,
-                  auth: nil
-                ]
-
     @type digest_opts() :: %{
             realm: String.t() | nil,
             nonce: String.t() | nil
@@ -41,8 +32,18 @@ defmodule Membrane.RTSP do
             uri: URI.t(),
             session_id: binary() | nil,
             auth: auth(),
-            response_timeout: non_neg_integer()
+            response_timeout: non_neg_integer() | nil,
+            receive_from: :socket | :external_process
           }
+
+    @enforce_keys [:socket, :uri, :response_timeout]
+    defstruct @enforce_keys ++
+                [
+                  :session_id,
+                  cseq: 0,
+                  auth: nil,
+                  receive_from: :socket
+                ]
   end
 
   @doc """
@@ -92,11 +93,11 @@ defmodule Membrane.RTSP do
     GenServer.call(session, :get_socket)
   end
 
-  @type headers :: [{binary(), binary()}]
-
   @spec handle_response(t(), binary()) :: Response.result()
   def handle_response(session, raw_response),
     do: send(session, {:raw_response, raw_response})
+
+  @type headers :: [{binary(), binary()}]
 
   @spec get_parameter_no_response(t(), headers(), binary()) :: :ok
   def get_parameter_no_response(session, headers \\ [], body \\ ""),
@@ -153,7 +154,7 @@ defmodule Membrane.RTSP do
         %URI{userinfo: info} when is_binary(info) -> :basic
       end
 
-    with {:ok, socket} <- TCPSocket.connect(url, options[:connection_timeout]) do
+    with {:ok, socket} <- Transport.connect(url, options[:connection_timeout]) do
       state = %State{
         socket: socket,
         uri: url,
@@ -178,12 +179,12 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_call(
-        {:transfer_socket_control, new_controlling_process},
-        _from,
-        %State{socket: socket} = state
-      ) do
-    {:reply, :gen_tcp.controlling_process(socket, new_controlling_process), state}
+  def handle_call({:transfer_socket_control, new_controlling_process}, _from, state) do
+    {
+      :reply,
+      :gen_tcp.controlling_process(state.socket, new_controlling_process),
+      %{state | receive_from: :external_process}
+    }
   end
 
   @impl true
@@ -191,30 +192,30 @@ defmodule Membrane.RTSP do
     {:reply, socket, state}
   end
 
-  @impl true
-  def handle_call({:parse_response, raw_response}, _from, state) do
-    with {:ok, response, state} <- parse_response(raw_response, state) do
-      {:reply, {:ok, response}, state}
-    else
-      {:error, reason} -> {:reply, {:error, reason}, state}
-    end
-  end
+  # @impl true
+  # def handle_call({:parse_response, raw_response}, _from, state) do
+  # with {:ok, response, state} <- parse_response(raw_response, state) do
+  # {:reply, {:ok, response}, state}
+  # else
+  # {:error, reason} -> {:reply, {:error, reason}, state}
+  # end
+  # end
 
   @impl true
   def handle_cast(:terminate, %State{} = state) do
     {:stop, :normal, state}
   end
 
-  @impl true
-  def handle_cast({:execute, request}, %State{cseq: cseq} = state) do
-    case execute(request, state, false) do
-      :ok ->
-        {:noreply, %State{state | cseq: cseq + 1}}
+  # @impl true
+  # def handle_cast({:execute, request}, %State{cseq: cseq} = state) do
+  # case execute(request, state, false) do
+  # :ok ->
+  # {:noreply, %State{state | cseq: cseq + 1}}
 
-      {:error, reason} ->
-        raise "Error executing request #{inspect(request)}, reason: #{inspect(reason)}"
-    end
-  end
+  # {:error, reason} ->
+  # raise "Error executing request #{inspect(request)}, reason: #{inspect(reason)}"
+  # end
+  # end
 
   @impl true
   def handle_info({:tcp, _socket, data}, state) do
@@ -229,7 +230,7 @@ defmodule Membrane.RTSP do
 
   @impl true
   def terminate(_reason, state) do
-    TCPSocket.close(state.socket)
+    Transport.close(state.socket)
   end
 
   @spec do_start(binary() | URI.t(), options(), (module(), any() -> GenServer.on_start())) ::
@@ -247,9 +248,8 @@ defmodule Membrane.RTSP do
     end
   end
 
-  @spec execute(Request.t(), State.t(), boolean()) ::
-          :ok | {:ok, binary()} | {:error, reason :: any()}
-  defp execute(request, state, get_response \\ true) do
+  @spec execute(Request.t(), State.t()) :: {:ok, binary()} | {:error, reason :: any()}
+  defp execute(request, state) do
     %State{
       cseq: cseq,
       socket: socket,
@@ -265,7 +265,7 @@ defmodule Membrane.RTSP do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> TCPSocket.execute(socket, response_timeout, get_response)
+    |> Transport.execute(socket, response_timeout, state.receive_from)
   end
 
   @spec inject_session_header(Request.t(), binary()) :: Request.t()
