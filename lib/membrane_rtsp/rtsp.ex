@@ -98,9 +98,11 @@ defmodule Membrane.RTSP do
     GenServer.call(session, :get_socket)
   end
 
-  @spec handle_response(t(), binary()) :: Response.result()
-  def handle_response(session, raw_response),
-    do: send(session, {:raw_response, raw_response})
+  @spec handle_response(t(), binary()) :: :ok
+  def handle_response(session, raw_response) do
+    send(session, {:raw_response, raw_response})
+    :ok
+  end
 
   @type headers :: [{binary(), binary()}]
 
