@@ -233,7 +233,7 @@ defmodule Membrane.RTSP do
     |> Transport.execute(socket, response_timeout, state.receive_from)
   end
 
-  @spec inject_session_header(Request.t(), binary()) :: Request.t()
+  @spec inject_session_header(Request.t(), binary() | nil) :: Request.t()
   defp inject_session_header(request, session_id) do
     case session_id do
       nil -> request
