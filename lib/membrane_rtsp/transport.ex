@@ -20,16 +20,26 @@ defmodule Membrane.RTSP.Transport do
 
   @spec execute(binary(), :gen_tcp.socket(), non_neg_integer() | nil, :socket | :external_process) ::
           {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
-  def execute(request, socket, response_timeout, receive_from) do
+  def execute(request, socket, response_timeout, :socket) do
     :inet.setopts(socket, active: false)
 
     result =
       with :ok <- mockable(:gen_tcp).send(socket, request) do
-        recv(socket, response_timeout, receive_from)
+        recv(socket, response_timeout)
       end
 
     :inet.setopts(socket, active: true)
     result
+  end
+
+  def execute(request, socket, response_timeout, :external_process) do
+    with :ok <- mockable(:gen_tcp).send(socket, request) do
+      receive do
+        {:raw_response, response} -> {:ok, response}
+      after
+        response_timeout || @response_timeout -> {:error, :timeout}
+      end
+    end
   end
 
   @spec close(:gen_tcp.socket()) :: :ok
@@ -37,21 +47,7 @@ defmodule Membrane.RTSP.Transport do
     :gen_tcp.close(socket)
   end
 
-  @spec recv(:gen_tcp.socket(), non_neg_integer() | nil, :socket | :external_process) ::
-          {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
-  defp recv(socket, response_timeout, :socket) do
-    recv_from_socket(socket, response_timeout)
-  end
-
-  defp recv(_socket, response_timeout, :external_process) do
-    receive do
-      {:raw_response, response} -> {:ok, response}
-    after
-      response_timeout || @response_timeout -> {:error, :timeout}
-    end
-  end
-
-  defp recv_from_socket(socket, response_timeout, length \\ 0, acc \\ <<>>) do
+  defp recv(socket, response_timeout, length \\ 0, acc \\ <<>>) do
     case do_recv(socket, response_timeout, length, acc) do
       {:ok, data} ->
         case Response.verify_content_length(data) do
@@ -59,7 +55,7 @@ defmodule Membrane.RTSP.Transport do
             {:ok, data}
 
           {:error, expected, received} ->
-            recv_from_socket(socket, response_timeout, expected - received, data)
+            recv(socket, response_timeout, expected - received, data)
         end
 
       {:error, reason} ->
