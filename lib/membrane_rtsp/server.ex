@@ -59,15 +59,10 @@ defmodule Membrane.RTSP.Server do
     - `name` - Used for name registration of the server. Defaults to `nil`.
     - `port` - The port where the server will listen for client connections. Defaults to: `554`
     - `address` - Specify the address where the `tcp` and `udp` sockets will be bound. Defaults to `:any`.
-    - `udp_rtp_port` - The port number of the `UDP` socket that will be opened to send `RTP` packets.
-    - `udp_rtcp_port` - The port number of the `UDP` socket that will be opened to send `RTCP` packets.
+    - `udp_rtp_port` - The port number of the `UDP` socket that will be opened to send `RTP` packets. If not provided a free ephemeral port will be opened.
+    - `udp_rtcp_port` - The port number of the `UDP` socket that will be opened to send `RTCP` packets. If not provided a free ephemeral port will be opened.
     - `session_timeout` - if the server does not receive any request from the client within the specified
       timeframe (in seconds), the connection will be closed. Defaults to 60 seconds.
-
-    > #### `Server UDP support` {: .warning}
-    >
-    > Both `udp_rtp_port` and `udp_rtcp_port` must be provided for the server
-    > to support `UDP` transport.
   """
   @spec start_link(server_config()) :: GenServer.on_start()
   def start_link(config) do
@@ -100,31 +95,25 @@ defmodule Membrane.RTSP.Server do
   @impl true
   def init(config) do
     address = config[:address] || :any
+    rtsp_port = config[:port] || 554
 
     {:ok, socket} =
-      :gen_tcp.listen(config[:port] || 554, [
-        :binary,
+      :gen_tcp.listen(rtsp_port,
+        mode: :binary,
         packet: :line,
         ip: address,
         active: false,
         reuseaddr: true
-      ])
+      )
 
-    udp_rtp_port = config[:udp_rtp_port]
-    udp_rtcp_port = config[:udp_rtcp_port]
+    udp_rtp_port = config[:udp_rtp_port] || 0
+    udp_rtcp_port = config[:udp_rtcp_port] || 0
 
-    {udp_rtp_socket, udp_rtcp_socket} =
-      if udp_rtp_port && udp_rtcp_port do
-        {:ok, udp_rtp_socket} =
-          :gen_udp.open(udp_rtp_port, [:binary, ip: address, reuseaddr: true, active: false])
+    {:ok, udp_rtp_socket} =
+      :gen_udp.open(udp_rtp_port, mode: :binary, ip: address, reuseaddr: true, active: false)
 
-        {:ok, udp_rtcp_socket} =
-          :gen_udp.open(udp_rtcp_port, [:binary, ip: address, reuseaddr: true, active: false])
-
-        {udp_rtp_socket, udp_rtcp_socket}
-      else
-        {nil, nil}
-      end
+    {:ok, udp_rtcp_socket} =
+      :gen_udp.open(udp_rtcp_port, mode: :binary, ip: address, reuseaddr: true, active: false)
 
     state = %{
       socket: socket,
