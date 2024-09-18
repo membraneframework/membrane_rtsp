@@ -1,6 +1,8 @@
-defmodule Membrane.RTSP.TCPSocket do
+defmodule Membrane.RTSP.Transport do
   @moduledoc false
   import Mockery.Macro
+
+  alias Membrane.RTSP.Response
 
   @connection_timeout 1000
   @response_timeout 5000
@@ -16,9 +18,9 @@ defmodule Membrane.RTSP.TCPSocket do
     )
   end
 
-  @spec execute(binary(), :gen_tcp.socket(), non_neg_integer() | nil, boolean()) ::
-          :ok | {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
-  def execute(request, socket, response_timeout, true = _get_response) do
+  @spec execute(binary(), :gen_tcp.socket(), non_neg_integer() | nil, :socket | :external_process) ::
+          {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
+  def execute(request, socket, response_timeout, :socket) do
     :inet.setopts(socket, active: false)
 
     result =
@@ -30,8 +32,14 @@ defmodule Membrane.RTSP.TCPSocket do
     result
   end
 
-  def execute(request, socket, _response_timeout, false = _get_response) do
-    mockable(:gen_tcp).send(socket, request)
+  def execute(request, socket, response_timeout, :external_process) do
+    with :ok <- mockable(:gen_tcp).send(socket, request) do
+      receive do
+        {:raw_response, response} -> {:ok, response}
+      after
+        response_timeout || @response_timeout -> {:error, :timeout}
+      end
+    end
   end
 
   @spec close(:gen_tcp.socket()) :: :ok
@@ -42,7 +50,7 @@ defmodule Membrane.RTSP.TCPSocket do
   defp recv(socket, response_timeout, length \\ 0, acc \\ <<>>) do
     case do_recv(socket, response_timeout, length, acc) do
       {:ok, data} ->
-        case Membrane.RTSP.Response.verify_content_length(data) do
+        case Response.verify_content_length(data) do
           {:ok, _expected, _received} ->
             {:ok, data}
 
@@ -56,7 +64,11 @@ defmodule Membrane.RTSP.TCPSocket do
   end
 
   defp do_recv(socket, response_timeout, length, acc) do
-    case mockable(:gen_tcp).recv(socket, length, response_timeout || @response_timeout) do
+    case mockable(:gen_tcp).recv(
+           socket,
+           length,
+           response_timeout || @response_timeout
+         ) do
       {:ok, data} -> {:ok, acc <> data}
       {:error, reason} -> {:error, reason}
     end

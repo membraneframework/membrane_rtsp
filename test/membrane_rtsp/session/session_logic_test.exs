@@ -5,14 +5,14 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
   alias Membrane.RTSP
   alias Membrane.RTSP.State
-  alias Membrane.RTSP.{Request, TCPSocket}
+  alias Membrane.RTSP.{Request, Transport}
 
   @response_header "RTSP/1.0 200 OK\r\n"
 
   setup_all do
     uri = "rtsp://localhost:5554/vod/mp4:name.mov" |> URI.parse()
     mock(:gen_tcp, :connect, :gen_tcp.listen(0, []))
-    {:ok, socket} = TCPSocket.connect(uri, 500)
+    {:ok, socket} = Transport.connect(uri, 500)
 
     state = %State{
       socket: socket,
