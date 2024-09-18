@@ -40,7 +40,7 @@ defmodule Membrane.RTSP do
     @enforce_keys [:socket, :uri, :response_timeout]
     defstruct @enforce_keys ++
                 [
-                  :session_id,
+                  session_id: nil,
                   cseq: 0,
                   auth: nil,
                   receive_from: :socket,
