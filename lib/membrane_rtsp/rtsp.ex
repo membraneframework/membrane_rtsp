@@ -204,7 +204,7 @@ defmodule Membrane.RTSP do
     case URI.parse(url) do
       %URI{host: host, scheme: "rtsp"} = url when is_binary(host) ->
         start_fun.(__MODULE__, %{
-          url: %URI{url | port: url.port || @default_rtsp_port},
+          url: %URI{url | port: url.port || @default_rtsp_port, path: url.path || "/"},
           options: options
         })
 
