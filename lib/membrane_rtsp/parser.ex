@@ -32,12 +32,16 @@ defmodule Membrane.RTSP.Parser do
           {:ok, RTSP.Request.transport_header()} | {:error, :invalid_header}
   def parse_transport_header(header) do
     case Transport.parse_transport_header(header) do
-      {:ok, [transport, mode | parameters], _rest, _context, _line, _byte_offset} ->
+      {:ok, [transport, network_mode | parameters], _rest, _context, _line, _byte_offset} ->
+        parameters = Map.new(parameters)
+        mode = String.downcase(parameters["mode"] || "play")
+
         {:ok,
          [
            transport: String.to_atom(transport),
+           network_mode: String.to_atom(network_mode),
            mode: String.to_atom(mode),
-           parameters: Map.new(parameters)
+           parameters: Map.delete(parameters, "mode")
          ]}
 
       {:error, _reason, _rest, _context, _line, _byte_offset} ->

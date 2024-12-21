@@ -1,12 +1,12 @@
 defmodule Membrane.RTSP.Server.FakeHandler do
   @moduledoc false
 
-  @behaviour Membrane.RTSP.Server.Handler
+  use Membrane.RTSP.Server.Handler
 
   import Mockery.Macro
 
   @impl true
-  def handle_open_connection(_conn), do: %{}
+  def handle_open_connection(_conn, _state), do: %{}
 
   @impl true
   def handle_closed_connection(_state), do: :ok
@@ -17,7 +17,12 @@ defmodule Membrane.RTSP.Server.FakeHandler do
   end
 
   @impl true
-  def handle_setup(request, state) do
+  def handle_setup(request, _mode, state) do
+    mockable(__MODULE__).respond(request, state)
+  end
+
+  @impl true
+  def handle_announce(request, state) do
     mockable(__MODULE__).respond(request, state)
   end
 
