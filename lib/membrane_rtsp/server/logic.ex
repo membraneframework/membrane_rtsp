@@ -23,14 +23,15 @@ defmodule Membrane.RTSP.Server.Logic do
   ]
 
   @udp_port_range 1000..65_000//2
+  @find_udp_port_max_attempts 1000
 
   defguardp can_play(state)
             when map_size(state.configured_media) != 0 and
-                   state.session_state in [:ready, :paused]
+                   state.session_state in [:ready, :paused_playing]
 
   defguardp can_record(state)
             when map_size(state.incoming_media) != 0 and
-                   state.session_state in [:ready, :paused]
+                   state.session_state in [:ready, :paused_recording]
 
   defmodule State do
     @moduledoc false
@@ -56,7 +57,8 @@ defmodule Membrane.RTSP.Server.Logic do
             configured_media: Server.Handler.configured_media_context(),
             incoming_media: Server.Handler.configured_media_context(),
             session_id: binary(),
-            session_state: :init | :ready | :playing | :recording | :paused,
+            session_state:
+              :init | :ready | :playing | :recording | :paused_playing | :paused_recording,
             session_timeout: non_neg_integer()
           }
   end
@@ -131,14 +133,19 @@ defmodule Membrane.RTSP.Server.Logic do
     end
   end
 
-  defp do_handle_request(%Request{method: "PAUSE"}, %{session_state: :playing} = state) do
+  defp do_handle_request(%Request{method: "PAUSE"}, state)
+       when state.session_state in [:playing, :recording] do
     {response, request_handler_state} =
       state.request_handler.handle_pause(state.request_handler_state)
 
     response = inject_session_header(response, state)
 
     if Response.ok?(response) do
-      {response, %{state | request_handler_state: request_handler_state, session_state: :paused}}
+      session_state =
+        if state.session_state == :playing, do: :paused_playing, else: :paused_recording
+
+      {response,
+       %{state | request_handler_state: request_handler_state, session_state: session_state}}
     else
       {response, %{state | request_handler_state: request_handler_state}}
     end
@@ -164,8 +171,6 @@ defmodule Membrane.RTSP.Server.Logic do
 
         {Response.new(400), state}
     end
-
-    {Response.new(200), state}
   end
 
   defp do_handle_request(%Request{method: "RECORD"}, state) when can_record(state) do
@@ -288,7 +293,7 @@ defmodule Membrane.RTSP.Server.Logic do
       :UDP ->
         case find_rtp_ports(0) do
           {rtp_socket, rtcp_socket} ->
-            {:ok, {address, _port}} = :inet.peername(state.socket)
+            {:ok, {address, _port}} = mockable(:inet).peername(state.socket)
 
             %{
               transport: :UDP,
@@ -304,7 +309,7 @@ defmodule Membrane.RTSP.Server.Logic do
     end
   end
 
-  defp find_rtp_ports(attempt) when attempt >= 100, do: :error
+  defp find_rtp_ports(attempt) when attempt >= @find_udp_port_max_attempts, do: :error
 
   defp find_rtp_ports(attempt) do
     rtp_port = Enum.random(@udp_port_range)
