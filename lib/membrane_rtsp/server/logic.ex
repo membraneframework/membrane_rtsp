@@ -174,7 +174,8 @@ defmodule Membrane.RTSP.Server.Logic do
   end
 
   defp do_handle_request(%Request{method: "RECORD"}, state) when can_record(state) do
-    {response, handler_state} = state.request_handler.handle_record(state.incoming_media, state)
+    {response, handler_state} =
+      state.request_handler.handle_record(state.incoming_media, state.request_handler_state)
 
     if Response.ok?(response) do
       {response, %{state | request_handler_state: handler_state, session_state: :recording}}
