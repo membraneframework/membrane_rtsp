@@ -1,7 +1,7 @@
 defmodule Membrane.RTSP.Server.Logic do
-  @moduledoc """
-  Logic for RTSP Server
-  """
+  @moduledoc false
+  # Logic for RTSP Server
+
   import Mockery.Macro
 
   require Logger
