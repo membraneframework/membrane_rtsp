@@ -2,10 +2,9 @@ defmodule Membrane.RTSP.Server.Logic do
   @moduledoc """
   Logic for RTSP Server
   """
+  import Mockery.Macro
 
   require Logger
-
-  import Mockery.Macro
 
   alias Membrane.RTSP.{Request, Response, Server}
 
