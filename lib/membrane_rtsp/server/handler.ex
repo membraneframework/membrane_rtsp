@@ -113,8 +113,8 @@ defmodule Membrane.RTSP.Server.Handler do
   @doc """
   Optional callback called when the server is initialized.
 
-  The argument is a term passed to the server as the `handler_config` option. 
-  The returned value will be used as a state and passed as the last 
+  The argument is a term passed to the server as the `handler_config` option.
+  The returned value will be used as a state and passed as the last
   argument to the subsequent callbacks.
 
   Default behavior is to return the argument unchanged.
@@ -143,11 +143,21 @@ defmodule Membrane.RTSP.Server.Handler do
   @callback handle_describe(request(), state()) :: {Response.t(), state()}
 
   @doc """
+  Callback called when receiving an ANNOUNCE request.
+
+  An announce request contains media description (`body` field of the request) of
+  the tracks that a client wish to publish to the server.
+  """
+  @callback handle_announce(request(), state()) :: {Response.t(), state()}
+
+  @doc """
   Callback called when receiving a SETUP request.
 
   The handler should check for the validity of the requested track (`path` field of the `Request` struct).
+
+  The `mode` argument provides the context of the setup, it's either `:play` or `:record`.
   """
-  @callback handle_setup(request(), state()) :: {Response.t(), state()}
+  @callback handle_setup(request(), mode :: :play | :record, state()) :: {Response.t(), state()}
 
   @doc """
   Callback called when receiving a PLAY request.
@@ -156,6 +166,14 @@ defmodule Membrane.RTSP.Server.Handler do
   Refer to the type documentation for more details
   """
   @callback handle_play(configured_media_context(), state()) :: {Response.t(), state()}
+
+  @doc """
+  Callback called when receiving a RECORD request.
+
+  `configured_media_context` contains the needed information to start receving media packets.
+  Refer to the type documentation for more details
+  """
+  @callback handle_record(configured_media_context(), state()) :: {Response.t(), state()}
 
   @doc """
   Callback called when receiving a PAUSE request.
@@ -174,7 +192,7 @@ defmodule Membrane.RTSP.Server.Handler do
   """
   @callback handle_teardown(state()) :: {Response.t(), state()}
 
-  @optional_callbacks init: 1
+  @optional_callbacks init: 1, handle_announce: 2, handle_record: 2
 
   defmacro __using__(_options) do
     quote do
@@ -183,7 +201,13 @@ defmodule Membrane.RTSP.Server.Handler do
       @impl true
       def init(config), do: config
 
-      defoverridable init: 1
+      @impl true
+      def handle_announce(_req, state), do: {Response.new(501), state}
+
+      @impl true
+      def handle_record(_req, state), do: {Response.new(501), state}
+
+      defoverridable init: 1, handle_announce: 2, handle_record: 2
     end
   end
 end

@@ -5,9 +5,9 @@
 [![CircleCI](https://circleci.com/gh/membraneframework/membrane_rtsp.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_rtsp)
 
 
-The RTSP client for Elixir
+The RTSP client and server for Elixir
 
-Currently supports only RTSP 1.1 defined by
+Currently supports only RTSP 1.0 defined by
 [RFC2326](https://tools.ietf.org/html/rfc2326)
 
 ## Installation

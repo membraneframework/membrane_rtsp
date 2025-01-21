@@ -13,9 +13,13 @@ defmodule Membrane.RTSP.Parser.Transport do
     |> optional(string("=") |> concat(param_value))
 
   single_value_param =
-    choice(Enum.map(["ssrc", "mode", "source"], &string/1))
+    choice(Enum.map(["ssrc", "source"], &string/1))
     |> string("=")
     |> concat(param_value)
+
+  play_mode = to_charlist("PLAY") |> Enum.reduce(empty(), &ascii_char(&2, [&1, &1 + 32]))
+  record_mode = to_charlist("RECORD") |> Enum.reduce(empty(), &ascii_char(&2, [&1, &1 + 32]))
+  mode_param = string("mode") |> string("=") |> choice([play_mode, record_mode])
 
   integer_value_param =
     choice(Enum.map(["ttl", "layers"], &string/1))
@@ -33,6 +37,7 @@ defmodule Membrane.RTSP.Parser.Transport do
     |> choice([
       string("append"),
       optional_value_param,
+      mode_param,
       single_value_param,
       integer_value_param,
       integer_range_param
@@ -54,6 +59,7 @@ defmodule Membrane.RTSP.Parser.Transport do
       case Enum.reverse(args) do
         [key] -> {key, nil}
         [key, "=", value] when is_binary(value) or key in ["ttl", "layers"] -> {key, value}
+        ["mode", "=" | value] -> {"mode", to_string(value)}
         [key, "=", value] -> {key, {value, value + 1}}
         [key, "=", min_value, max_value] -> {key, {min_value, max_value}}
       end

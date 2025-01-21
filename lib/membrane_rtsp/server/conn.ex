@@ -4,9 +4,8 @@ defmodule Membrane.RTSP.Server.Conn do
 
   require Logger
 
+  alias Membrane.RTSP.Request
   alias Membrane.RTSP.Server.Logic
-
-  @max_request_size 1_000_000
 
   @spec start(map()) :: GenServer.on_start()
   def start(state) do
@@ -30,27 +29,59 @@ defmodule Membrane.RTSP.Server.Conn do
 
   @impl true
   def handle_continue(:process_client_requests, state) do
-    do_process_client_requests(state)
+    do_process_client_requests(state, state.session_timeout)
     state.request_handler.handle_closed_connection(state.request_handler_state)
     {:stop, :normal, state}
   end
 
-  defp do_process_client_requests(state) do
-    with {:ok, request} <- get_request(state.socket, state.session_timeout) do
-      request
-      |> Logic.process_request(state)
-      |> do_process_client_requests()
+  defp do_process_client_requests(state, timeout) do
+    with {:ok, request} <- get_request(state.socket, timeout) do
+      case Logic.process_request(request, state) do
+        %{session_state: :recording} = state ->
+          do_process_client_requests(state, :infinity)
+
+        state ->
+          do_process_client_requests(state, state.session_timeout)
+      end
     end
   end
 
-  defp get_request(socket, timeout, request \\ "") do
-    with {:ok, packet} <- :gen_tcp.recv(socket, 0, timeout),
-         request <- request <> packet,
-         false <- byte_size(request) > @max_request_size do
-      if packet != "\r\n", do: get_request(socket, timeout, request), else: {:ok, request}
-    else
-      {:error, reason} -> {:error, reason}
-      true -> {:error, :max_request_size_exceeded}
+  defp get_request(socket, timeout, acc \\ "") do
+    with {:ok, acc} <- do_recv(socket, timeout, acc) do
+      headers_and_body = String.split(acc, ~r/\r?\n\r?\n/, parts: 2)
+
+      case do_parse_request(headers_and_body) do
+        :more -> get_request(socket, timeout, acc)
+        other -> other
+      end
     end
   end
+
+  defp do_recv(socket, timeout, acc) do
+    case :gen_tcp.recv(socket, 0, timeout) do
+      {:ok, data} -> {:ok, acc <> data}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp do_parse_request([raw_request, body]) do
+    case Request.parse(raw_request <> "\r\n\r\n") do
+      {:ok, request} ->
+        content_length =
+          case Request.get_header(request, "Content-Length") do
+            {:ok, value} -> String.to_integer(value)
+            _error -> 0
+          end
+
+        case byte_size(body) >= content_length do
+          true -> {:ok, %Request{request | body: :binary.part(body, 0, content_length)}}
+          false -> :more
+        end
+
+      _error ->
+        {:error, :invalid_request}
+    end
+  end
+
+  defp do_parse_request(_raw_request), do: :more
 end
