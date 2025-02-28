@@ -97,6 +97,20 @@ defmodule Membrane.RTSP.Server do
     GenServer.call(server, :port_number)
   end
 
+  @doc """
+  In interleaved TCP mode we want to pass control over the client connection socket to the pipeline (usually).
+
+  This function allows to transfer the control over such socket to a specified process.
+  """
+  @spec transfer_client_socket_control(
+          server_pid :: pid() | GenServer.name(),
+          client_conn_pid :: pid(),
+          new_controlling_process_pid :: pid()
+        ) :: :ok | {:error, :unknown_conn | :closed | :not_owner | :badarg | :inet.posix()}
+  def transfer_client_socket_control(server, conn_pid, new_controlling_process) do
+    GenServer.call(server, {:transfer_client_socket_control, conn_pid, new_controlling_process})
+  end
+
   @impl true
   def init(config) do
     address = config[:address] || :any
@@ -148,6 +162,21 @@ defmodule Membrane.RTSP.Server do
   end
 
   @impl true
+  def handle_call(
+        {:transfer_client_socket_control, conn_pid, new_controlling_process},
+        _from,
+        state
+      ) do
+    case Map.fetch(state.client_conns, conn_pid) do
+      {:ok, socket} ->
+        {:reply, :gen_tcp.controlling_process(socket, new_controlling_process), state}
+
+      :error ->
+        {:reply, {:error, :unknown_conn}, state}
+    end
+  end
+
+  @impl true
   def handle_info({:new_connection, client_socket}, state) do
     child_state =
       state
@@ -187,6 +216,7 @@ defmodule Membrane.RTSP.Server do
   defp do_listen(socket, parent_pid) do
     case :gen_tcp.accept(socket) do
       {:ok, client_socket} ->
+        :ok = :gen_tcp.controlling_process(client_socket, parent_pid)
         send(parent_pid, {:new_connection, client_socket})
         do_listen(socket, parent_pid)
 

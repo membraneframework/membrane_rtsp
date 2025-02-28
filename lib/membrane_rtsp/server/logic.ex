@@ -41,10 +41,12 @@ defmodule Membrane.RTSP.Server.Logic do
                   :rtcp_socket,
                   :request_handler_state,
                   :session_timeout,
+                  :transport_opts,
                   configured_media: %{},
                   incoming_media: %{},
                   session_id: UUID.uuid4(),
-                  session_state: :init
+                  session_state: :init,
+                  recording?: false
                 ]
 
     @type t :: %__MODULE__{
@@ -111,7 +113,9 @@ defmodule Membrane.RTSP.Server.Logic do
         )
 
       {response, state} = do_handle_setup_response(request, response, transport_opts, state)
-      {response, %{state | request_handler_state: request_handler_state}}
+
+      {response,
+       %{state | request_handler_state: request_handler_state, transport_opts: transport_opts}}
     else
       error ->
         Logger.error("SETUP request failed due to: #{inspect(error)}")
@@ -176,10 +180,20 @@ defmodule Membrane.RTSP.Server.Logic do
     {response, handler_state} =
       state.request_handler.handle_record(state.incoming_media, state.request_handler_state)
 
+    tcp_interleaved_mode? =
+      state.transport_opts[:transport] == :TCP && state.transport_opts[:mode] == :record
+
     if Response.ok?(response) do
-      {response, %{state | request_handler_state: handler_state, session_state: :recording}}
+      {response,
+       %{
+         state
+         | request_handler_state: handler_state,
+           session_state: :recording,
+           recording?: tcp_interleaved_mode?
+       }}
     else
-      {response, %{state | request_handler_state: handler_state}}
+      {response,
+       %{state | request_handler_state: handler_state, recording?: tcp_interleaved_mode?}}
     end
   end
 
@@ -214,9 +228,6 @@ defmodule Membrane.RTSP.Server.Logic do
     cond do
       transport_opts[:network_mode] == :multicast ->
         {:error, :multicast_not_supported}
-
-      transport_opts[:mode] == :record and transport != :UDP ->
-        {:error, :unsupported_transport}
 
       transport_opts[:mode] == :play and transport == :UDP and is_nil(state.rtp_socket) ->
         {:error, :udp_not_supported}
