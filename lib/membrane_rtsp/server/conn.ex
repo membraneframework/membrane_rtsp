@@ -39,6 +39,18 @@ defmodule Membrane.RTSP.Server.Conn do
     end
   end
 
+  @impl true
+  def handle_info({:rtsp, %Request{} = rtsp_request}, state) do
+    case Logic.process_request(rtsp_request, state) do
+      %Logic.State{recording?: true} = state ->
+        {:noreply, state}
+
+      state ->
+        state.request_handler.handle_closed_connection(state.request_handler_state)
+        {:stop, :normal, state}
+    end
+  end
+
   defp do_process_client_requests(state, timeout) do
     with {:ok, request} <- get_request(state.socket, timeout) do
       case Logic.process_request(request, state) do
