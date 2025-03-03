@@ -181,7 +181,7 @@ defmodule Membrane.RTSP.Server.Logic do
       state.request_handler.handle_record(state.incoming_media, state.request_handler_state)
 
     tcp_interleaved_mode? =
-      state.transport_opts[:transport] == :TCP && state.transport_opts[:mode] == :record
+      state.transport_opts[:transport] == :TCP
 
     if Response.ok?(response) do
       {response,
@@ -192,8 +192,7 @@ defmodule Membrane.RTSP.Server.Logic do
            recording?: tcp_interleaved_mode?
        }}
     else
-      {response,
-       %{state | request_handler_state: handler_state, recording?: tcp_interleaved_mode?}}
+      {response, %{state | request_handler_state: handler_state, recording?: false}}
     end
   end
 

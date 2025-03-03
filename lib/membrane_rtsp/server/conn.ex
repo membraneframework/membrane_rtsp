@@ -51,6 +51,18 @@ defmodule Membrane.RTSP.Server.Conn do
     end
   end
 
+  @impl true
+  def handle_info({:rtsp, raw_rtsp_request}, state) do
+    case Request.parse(raw_rtsp_request) do
+      {:ok, rtsp_request} ->
+        handle_info({:rtsp, rtsp_request}, state)
+
+      _error ->
+        Logger.warning("Failed to parse RTSP request: #{inspect(raw_rtsp_request)}")
+        {:noreply, state}
+    end
+  end
+
   defp do_process_client_requests(state, timeout) do
     with {:ok, request} <- get_request(state.socket, timeout) do
       case Logic.process_request(request, state) do
