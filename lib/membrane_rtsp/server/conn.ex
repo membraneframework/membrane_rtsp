@@ -33,8 +33,13 @@ defmodule Membrane.RTSP.Server.Conn do
       %Logic.State{recording?: true} = state ->
         {:noreply, state}
 
-      state ->
+      %Logic.State{} = state ->
         state.request_handler.handle_closed_connection(state.request_handler_state)
+        {:stop, :normal, state}
+
+      {:error, :closed} ->
+        state.request_handler.handle_closed_connection(state.request_handler_state)
+
         {:stop, :normal, state}
     end
   end
