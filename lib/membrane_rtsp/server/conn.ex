@@ -40,17 +40,6 @@ defmodule Membrane.RTSP.Server.Conn do
   end
 
   @impl true
-  def handle_info({:rtsp, %Request{} = rtsp_request}, state) do
-    case Logic.process_request(rtsp_request, state) do
-      %Logic.State{recording_with_tcp?: true} = state ->
-        {:noreply, state}
-
-      state ->
-        handle_continue(:process_client_requests, state)
-    end
-  end
-
-  @impl true
   def handle_info({:rtsp, raw_rtsp_request}, state) do
     with {:ok, request} <- Request.parse(raw_rtsp_request) do
       case Logic.process_request(request, state) do
