@@ -60,6 +60,9 @@ defmodule Membrane.RTSP.Server.Conn do
         state ->
           handle_continue(:process_client_requests, state)
       end
+    else
+      {:error, error} ->
+        raise "Failed to parse RTSP request: #{inspect(error)}.\nRequest: #{inspect(raw_rtsp_request)}"
     end
   end
 
