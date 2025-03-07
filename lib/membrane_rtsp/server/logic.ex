@@ -148,7 +148,12 @@ defmodule Membrane.RTSP.Server.Logic do
         if state.session_state == :playing, do: :paused_playing, else: :paused_recording
 
       {response,
-       %{state | request_handler_state: request_handler_state, session_state: session_state}}
+       %{
+         state
+         | request_handler_state: request_handler_state,
+           session_state: session_state,
+           recording?: false
+       }}
     else
       {response, %{state | request_handler_state: request_handler_state}}
     end
