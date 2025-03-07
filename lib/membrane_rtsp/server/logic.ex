@@ -202,7 +202,16 @@ defmodule Membrane.RTSP.Server.Logic do
 
     Response.new(200)
     |> inject_session_header(state)
-    |> then(&{&1, %{state | configured_media: %{}, incoming_media: %{}, session_state: :init}})
+    |> then(
+      &{&1,
+       %{
+         state
+         | configured_media: %{},
+           incoming_media: %{},
+           session_state: :init,
+           recording?: false
+       }}
+    )
   end
 
   defp do_handle_request(%Request{method: "TEARDOWN"}, state) do
@@ -213,7 +222,16 @@ defmodule Membrane.RTSP.Server.Logic do
 
     response
     |> inject_session_header(state)
-    |> then(&{&1, %{state | session_state: :init, configured_media: %{}, incoming_media: %{}}})
+    |> then(
+      &{&1,
+       %{
+         state
+         | session_state: :init,
+           configured_media: %{},
+           incoming_media: %{},
+           recording?: false
+       }}
+    )
   end
 
   defp do_handle_request(%Request{}, state) do

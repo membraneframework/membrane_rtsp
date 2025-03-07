@@ -303,6 +303,17 @@ defmodule Membrane.RTSP.ServerLogicTest do
                %Request{method: "TEARDOWN", path: @url}
                |> Logic.process_request(state)
     end
+
+    test "resets recording? flag", %{state: state} do
+      state = %State{state | recording?: true, session_state: :playing}
+
+      mock(FakeHandler, [respond: 2], fn nil, state -> {Response.new(200), state} end)
+      mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "RTSP/1.0 200 OK" end)
+
+      assert %{recording?: false} =
+               %Request{method: "TEARDOWN", path: @url}
+               |> Logic.process_request(state)
+    end
   end
 
   test "return 501 (Not Implemented) for not supported methods", %{state: state} do

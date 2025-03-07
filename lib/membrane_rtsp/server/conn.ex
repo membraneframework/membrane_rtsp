@@ -46,20 +46,20 @@ defmodule Membrane.RTSP.Server.Conn do
         {:noreply, state}
 
       state ->
-        state.request_handler.handle_closed_connection(state.request_handler_state)
-        {:stop, :normal, state}
+        handle_continue(:process_client_requests, state)
     end
   end
 
   @impl true
   def handle_info({:rtsp, raw_rtsp_request}, state) do
-    case Request.parse(raw_rtsp_request) do
-      {:ok, rtsp_request} ->
-        handle_info({:rtsp, rtsp_request}, state)
+    with {:ok, request} <- Request.parse(raw_rtsp_request) do
+      case Logic.process_request(request, state) do
+        %Logic.State{recording?: true} = state ->
+          {:noreply, state}
 
-      _error ->
-        Logger.warning("Failed to parse RTSP request: #{inspect(raw_rtsp_request)}")
-        {:noreply, state}
+        state ->
+          handle_continue(:process_client_requests, state)
+      end
     end
   end
 
