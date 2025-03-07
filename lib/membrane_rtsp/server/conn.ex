@@ -30,7 +30,7 @@ defmodule Membrane.RTSP.Server.Conn do
   @impl true
   def handle_continue(:process_client_requests, state) do
     case do_process_client_requests(state, state.session_timeout) do
-      %Logic.State{recording?: true} = state ->
+      %Logic.State{recording_with_tcp?: true} = state ->
         {:noreply, state}
 
       _other ->
@@ -42,7 +42,7 @@ defmodule Membrane.RTSP.Server.Conn do
   @impl true
   def handle_info({:rtsp, %Request{} = rtsp_request}, state) do
     case Logic.process_request(rtsp_request, state) do
-      %Logic.State{recording?: true} = state ->
+      %Logic.State{recording_with_tcp?: true} = state ->
         {:noreply, state}
 
       state ->
@@ -54,7 +54,7 @@ defmodule Membrane.RTSP.Server.Conn do
   def handle_info({:rtsp, raw_rtsp_request}, state) do
     with {:ok, request} <- Request.parse(raw_rtsp_request) do
       case Logic.process_request(request, state) do
-        %Logic.State{recording?: true} = state ->
+        %Logic.State{recording_with_tcp?: true} = state ->
           {:noreply, state}
 
         state ->
@@ -69,7 +69,7 @@ defmodule Membrane.RTSP.Server.Conn do
   defp do_process_client_requests(state, timeout) do
     with {:ok, request} <- get_request(state.socket, timeout) do
       case Logic.process_request(request, state) do
-        %Logic.State{recording?: true} = state ->
+        %Logic.State{recording_with_tcp?: true} = state ->
           state
 
         %Logic.State{session_state: :recording} = state ->

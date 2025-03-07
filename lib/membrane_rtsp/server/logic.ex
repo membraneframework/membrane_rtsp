@@ -46,7 +46,7 @@ defmodule Membrane.RTSP.Server.Logic do
                   incoming_media: %{},
                   session_id: UUID.uuid4(),
                   session_state: :init,
-                  recording?: false
+                  recording_with_tcp?: false
                 ]
 
     @type t :: %__MODULE__{
@@ -152,7 +152,7 @@ defmodule Membrane.RTSP.Server.Logic do
          state
          | request_handler_state: request_handler_state,
            session_state: session_state,
-           recording?: false
+           recording_with_tcp?: false
        }}
     else
       {response, %{state | request_handler_state: request_handler_state}}
@@ -194,10 +194,10 @@ defmodule Membrane.RTSP.Server.Logic do
          state
          | request_handler_state: handler_state,
            session_state: :recording,
-           recording?: tcp_interleaved_mode?
+           recording_with_tcp?: tcp_interleaved_mode?
        }}
     else
-      {response, %{state | request_handler_state: handler_state, recording?: false}}
+      {response, %{state | request_handler_state: handler_state, recording_with_tcp?: false}}
     end
   end
 
@@ -214,7 +214,7 @@ defmodule Membrane.RTSP.Server.Logic do
          | configured_media: %{},
            incoming_media: %{},
            session_state: :init,
-           recording?: false
+           recording_with_tcp?: false
        }}
     )
   end
@@ -234,7 +234,7 @@ defmodule Membrane.RTSP.Server.Logic do
          | session_state: :init,
            configured_media: %{},
            incoming_media: %{},
-           recording?: false
+           recording_with_tcp?: false
        }}
     )
   end

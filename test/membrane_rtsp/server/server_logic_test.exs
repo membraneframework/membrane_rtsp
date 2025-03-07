@@ -304,13 +304,13 @@ defmodule Membrane.RTSP.ServerLogicTest do
                |> Logic.process_request(state)
     end
 
-    test "resets recording? flag", %{state: state} do
-      state = %State{state | recording?: true, session_state: :playing}
+    test "resets recording_with_tcp? flag", %{state: state} do
+      state = %State{state | recording_with_tcp?: true, session_state: :playing}
 
       mock(FakeHandler, [respond: 2], fn nil, state -> {Response.new(200), state} end)
       mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "RTSP/1.0 200 OK" end)
 
-      assert %{recording?: false} =
+      assert %{recording_with_tcp?: false} =
                %Request{method: "TEARDOWN", path: @url}
                |> Logic.process_request(state)
     end
