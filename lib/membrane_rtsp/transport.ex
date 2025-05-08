@@ -2,6 +2,8 @@ defmodule Membrane.RTSP.Transport do
   @moduledoc false
   import Mockery.Macro
 
+  require Logger
+
   alias Membrane.RTSP.Response
 
   @connection_timeout 1000
@@ -53,6 +55,14 @@ defmodule Membrane.RTSP.Transport do
         case Response.verify_content_length(data) do
           {:ok, _expected, _received} ->
             {:ok, data}
+
+          {:error, expected, received} when received > expected ->
+            Logger.warning(
+              "Received #{received} bytes, but expected a body of #{expected} bytes. Truncating the response."
+            )
+
+            excess = received - expected
+            {:ok, :binary.part(data, 0, byte_size(data) - excess)}
 
           {:error, expected, received} ->
             recv(socket, response_timeout, expected - received, data)
