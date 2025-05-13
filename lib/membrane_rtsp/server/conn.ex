@@ -29,15 +29,39 @@ defmodule Membrane.RTSP.Server.Conn do
 
   @impl true
   def handle_continue(:process_client_requests, state) do
-    do_process_client_requests(state, state.session_timeout)
-    state.request_handler.handle_closed_connection(state.request_handler_state)
-    {:stop, :normal, state}
+    case do_process_client_requests(state, state.session_timeout) do
+      %Logic.State{recording_with_tcp?: true} = state ->
+        {:noreply, state}
+
+      _other ->
+        state.request_handler.handle_closed_connection(state.request_handler_state)
+        {:stop, :normal, state}
+    end
+  end
+
+  @impl true
+  def handle_info({:rtsp, raw_rtsp_request}, state) do
+    with {:ok, request} <- Request.parse(raw_rtsp_request) do
+      case Logic.process_request(request, state) do
+        %Logic.State{recording_with_tcp?: true} = state ->
+          {:noreply, state}
+
+        state ->
+          handle_continue(:process_client_requests, state)
+      end
+    else
+      {:error, error} ->
+        raise "Failed to parse RTSP request: #{inspect(error)}.\nRequest: #{inspect(raw_rtsp_request)}"
+    end
   end
 
   defp do_process_client_requests(state, timeout) do
     with {:ok, request} <- get_request(state.socket, timeout) do
       case Logic.process_request(request, state) do
-        %{session_state: :recording} = state ->
+        %Logic.State{recording_with_tcp?: true} = state ->
+          state
+
+        %Logic.State{session_state: :recording} = state ->
           do_process_client_requests(state, :infinity)
 
         state ->

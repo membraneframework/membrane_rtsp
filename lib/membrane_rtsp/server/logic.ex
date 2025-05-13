@@ -41,10 +41,12 @@ defmodule Membrane.RTSP.Server.Logic do
                   :rtcp_socket,
                   :request_handler_state,
                   :session_timeout,
+                  :transport_opts,
                   configured_media: %{},
                   incoming_media: %{},
                   session_id: UUID.uuid4(),
-                  session_state: :init
+                  session_state: :init,
+                  recording_with_tcp?: false
                 ]
 
     @type t :: %__MODULE__{
@@ -111,7 +113,9 @@ defmodule Membrane.RTSP.Server.Logic do
         )
 
       {response, state} = do_handle_setup_response(request, response, transport_opts, state)
-      {response, %{state | request_handler_state: request_handler_state}}
+
+      {response,
+       %{state | request_handler_state: request_handler_state, transport_opts: transport_opts}}
     else
       error ->
         Logger.error("SETUP request failed due to: #{inspect(error)}")
@@ -144,7 +148,12 @@ defmodule Membrane.RTSP.Server.Logic do
         if state.session_state == :playing, do: :paused_playing, else: :paused_recording
 
       {response,
-       %{state | request_handler_state: request_handler_state, session_state: session_state}}
+       %{
+         state
+         | request_handler_state: request_handler_state,
+           session_state: session_state,
+           recording_with_tcp?: false
+       }}
     else
       {response, %{state | request_handler_state: request_handler_state}}
     end
@@ -176,10 +185,19 @@ defmodule Membrane.RTSP.Server.Logic do
     {response, handler_state} =
       state.request_handler.handle_record(state.incoming_media, state.request_handler_state)
 
+    tcp_interleaved_mode? =
+      state.transport_opts[:transport] == :TCP
+
     if Response.ok?(response) do
-      {response, %{state | request_handler_state: handler_state, session_state: :recording}}
+      {response,
+       %{
+         state
+         | request_handler_state: handler_state,
+           session_state: :recording,
+           recording_with_tcp?: tcp_interleaved_mode?
+       }}
     else
-      {response, %{state | request_handler_state: handler_state}}
+      {response, %{state | request_handler_state: handler_state, recording_with_tcp?: false}}
     end
   end
 
@@ -189,7 +207,16 @@ defmodule Membrane.RTSP.Server.Logic do
 
     Response.new(200)
     |> inject_session_header(state)
-    |> then(&{&1, %{state | configured_media: %{}, incoming_media: %{}, session_state: :init}})
+    |> then(
+      &{&1,
+       %{
+         state
+         | configured_media: %{},
+           incoming_media: %{},
+           session_state: :init,
+           recording_with_tcp?: false
+       }}
+    )
   end
 
   defp do_handle_request(%Request{method: "TEARDOWN"}, state) do
@@ -200,7 +227,16 @@ defmodule Membrane.RTSP.Server.Logic do
 
     response
     |> inject_session_header(state)
-    |> then(&{&1, %{state | session_state: :init, configured_media: %{}, incoming_media: %{}}})
+    |> then(
+      &{&1,
+       %{
+         state
+         | session_state: :init,
+           configured_media: %{},
+           incoming_media: %{},
+           recording_with_tcp?: false
+       }}
+    )
   end
 
   defp do_handle_request(%Request{}, state) do
@@ -214,9 +250,6 @@ defmodule Membrane.RTSP.Server.Logic do
     cond do
       transport_opts[:network_mode] == :multicast ->
         {:error, :multicast_not_supported}
-
-      transport_opts[:mode] == :record and transport != :UDP ->
-        {:error, :unsupported_transport}
 
       transport_opts[:mode] == :play and transport == :UDP and is_nil(state.rtp_socket) ->
         {:error, :udp_not_supported}
