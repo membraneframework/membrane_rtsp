@@ -51,6 +51,13 @@ defmodule Membrane.RTSP.Transport do
 
   defp recv(socket, response_timeout, length \\ 0, acc \\ <<>>) do
     case do_recv(socket, response_timeout, length, acc) do
+      # skip rtp/rtcp packets
+      {:ok, <<"$", _channel::8, size::16, _rtp::binary-size(size), rest::binary>>} ->
+        recv(socket, response_timeout, 0, rest)
+
+      {:ok, <<"$", _rest::binary>> = data} ->
+        recv(socket, response_timeout, 0, data)
+
       {:ok, data} ->
         case Response.verify_content_length(data) do
           {:ok, _expected, _received} ->
