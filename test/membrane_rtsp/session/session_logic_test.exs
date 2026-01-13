@@ -41,7 +41,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
       assert {:reply, {:ok, _response}, next_state} =
                RTSP.handle_call({:execute, request}, nil, state)
 
-      assert next_state == %State{state | cseq: state.cseq + 1}
+      assert next_state == %{state | cseq: state.cseq + 1}
     end
 
     test "returns an error if response has different session", %{
@@ -56,7 +56,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
     end
 
     test "preserves session_id", %{request: request, state: state} do
-      state = %State{state | session_id: nil}
+      state = %{state | session_id: nil}
       session_id = "arbitrary_string"
       request = request |> Request.with_header("Session", session_id)
 
@@ -75,7 +75,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     test "add session_id header to request", %{request: request, state: state} do
       session_id = "arbitrary_string"
-      state = %State{state | session_id: session_id}
+      state = %{state | session_id: session_id}
 
       mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
         assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
@@ -103,7 +103,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
       end)
 
       parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
-      state = %State{state | uri: parsed_uri, auth: :basic}
+      state = %{state | uri: parsed_uri, auth: :basic}
 
       assert {:reply, {:ok, _response}, _state} =
                RTSP.handle_call({:execute, request}, nil, state)
@@ -122,7 +122,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
       end)
 
       parsed_uri = URI.parse("rtsp://login:password@localhost:5554/vod/mp4:name.mov")
-      state = %State{state | uri: parsed_uri}
+      state = %{state | uri: parsed_uri}
 
       assert {:reply, {:ok, _response}, _state} =
                RTSP.handle_call({:execute, request}, nil, state)
@@ -155,7 +155,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
     parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
     digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm"}}
 
-    state = %State{state | uri: parsed_uri, auth: digest_auth_options}
+    state = %{state | uri: parsed_uri, auth: digest_auth_options}
 
     assert {:reply, {:ok, _response}, _state} = RTSP.handle_call({:execute, request}, nil, state)
   end

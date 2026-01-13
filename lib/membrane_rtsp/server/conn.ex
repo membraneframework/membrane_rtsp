@@ -33,7 +33,7 @@ defmodule Membrane.RTSP.Server.Conn do
       %Logic.State{recording_with_tcp?: true} = state ->
         {:noreply, state}
 
-      _other ->
+      {:error, _reason, state} ->
         state.request_handler.handle_closed_connection(state.request_handler_state)
         {:stop, :normal, state}
     end
@@ -56,17 +56,21 @@ defmodule Membrane.RTSP.Server.Conn do
   end
 
   defp do_process_client_requests(state, timeout) do
-    with {:ok, request} <- get_request(state.socket, timeout) do
-      case Logic.process_request(request, state) do
-        %Logic.State{recording_with_tcp?: true} = state ->
-          state
+    case get_request(state.socket, timeout) do
+      {:ok, request} ->
+        case Logic.process_request(request, state) do
+          %Logic.State{recording_with_tcp?: true} = state ->
+            state
 
-        %Logic.State{session_state: :recording} = state ->
-          do_process_client_requests(state, :infinity)
+          %Logic.State{session_state: :recording} = state ->
+            do_process_client_requests(state, :infinity)
 
-        state ->
-          do_process_client_requests(state, state.session_timeout)
-      end
+          state ->
+            do_process_client_requests(state, state.session_timeout)
+        end
+
+      {:error, reason} ->
+        {:error, reason, state}
     end
   end
 
@@ -98,7 +102,7 @@ defmodule Membrane.RTSP.Server.Conn do
           end
 
         case byte_size(body) >= content_length do
-          true -> {:ok, %Request{request | body: :binary.part(body, 0, content_length)}}
+          true -> {:ok, %{request | body: :binary.part(body, 0, content_length)}}
           false -> :more
         end
 

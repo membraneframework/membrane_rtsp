@@ -202,12 +202,26 @@ defmodule Membrane.RTSP.Server.Handler do
       def init(config), do: config
 
       @impl true
+      def handle_open_connection(_conn, state), do: state
+
+      @impl true
       def handle_announce(_req, state), do: {Response.new(501), state}
 
       @impl true
       def handle_record(_req, state), do: {Response.new(501), state}
 
-      defoverridable init: 1, handle_announce: 2, handle_record: 2
+      @impl true
+      def handle_pause(state), do: {Response.new(501), state}
+
+      @impl true
+      def handle_closed_connection(_state), do: :ok
+
+      defoverridable init: 1,
+                     handle_open_connection: 2,
+                     handle_announce: 2,
+                     handle_record: 2,
+                     handle_pause: 1,
+                     handle_closed_connection: 1
     end
   end
 end
