@@ -238,6 +238,8 @@ defmodule Membrane.RTSP.Response do
   defp render_status(404), do: "Not Found"
   defp render_status(405), do: "Method Not Allowed"
   defp render_status(455), do: "Method Not Valid In This State"
+  defp render_status(461), do: "Unsupported Transport"
   defp render_status(500), do: "Internal Server Error"
   defp render_status(501), do: "Not Implemented"
+  defp render_status(_), do: "Generic Error"
 end
