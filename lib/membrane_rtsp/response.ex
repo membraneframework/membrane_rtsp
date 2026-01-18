@@ -241,5 +241,5 @@ defmodule Membrane.RTSP.Response do
   defp render_status(461), do: "Unsupported Transport"
   defp render_status(500), do: "Internal Server Error"
   defp render_status(501), do: "Not Implemented"
-  defp render_status(_), do: "Generic Error"
+  defp render_status(_status), do: "Generic Error"
 end
