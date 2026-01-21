@@ -165,8 +165,8 @@ defmodule Membrane.RTSP.Request do
   algorithm
   """
   @spec process_uri(t(), URI.t()) :: binary()
-  def process_uri(request, uri) do
-    apply_path(%{uri | userinfo: nil}, request)
+  def process_uri(request, %URI{} = uri) do
+    apply_path(%URI{uri | userinfo: nil}, request)
   end
 
   defp apply_path(%URI{} = base_url, %__MODULE__{path: nil}), do: base_url

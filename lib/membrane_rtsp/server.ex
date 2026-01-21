@@ -124,6 +124,9 @@ defmodule Membrane.RTSP.Server do
         reuseaddr: true
       ])
 
+    {:ok, port} = :inet.port(socket)
+    Logger.info("RTSP server listening on port #{port}")
+
     udp_rtp_port = config[:udp_rtp_port]
     udp_rtcp_port = config[:udp_rtcp_port]
 

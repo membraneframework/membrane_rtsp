@@ -94,7 +94,7 @@ defmodule Membrane.RTSP.Server.Conn do
 
   defp do_parse_request([raw_request, body]) do
     case Request.parse(raw_request <> "\r\n\r\n") do
-      {:ok, request} ->
+      {:ok, %Request{} = request} ->
         content_length =
           case Request.get_header(request, "Content-Length") do
             {:ok, value} -> String.to_integer(value)
@@ -102,7 +102,7 @@ defmodule Membrane.RTSP.Server.Conn do
           end
 
         case byte_size(body) >= content_length do
-          true -> {:ok, %{request | body: :binary.part(body, 0, content_length)}}
+          true -> {:ok, %Request{request | body: :binary.part(body, 0, content_length)}}
           false -> :more
         end
 

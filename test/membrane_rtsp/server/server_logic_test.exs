@@ -224,8 +224,8 @@ defmodule Membrane.RTSP.ServerLogicTest do
                |> Logic.process_request(state)
     end
 
-    test "not allowed when playing", %{state: state} do
-      state = %{state | session_state: :playing}
+    test "not allowed when playing", %{state: %State{} = state} do
+      state = %State{state | session_state: :playing}
 
       mock(:gen_tcp, [send: 2], fn %{}, response ->
         assert response =~ "RTSP/1.0 455 Method Not Valid In This State"
@@ -238,7 +238,7 @@ defmodule Membrane.RTSP.ServerLogicTest do
   end
 
   describe "handle PLAY request" do
-    test "handle PLAY request", %{state: state} do
+    test "handle PLAY request", %{state: %State{} = state} do
       uri = %URI{@url | path: "/stream/trackId=0"} |> URI.to_string()
 
       configured_media = %{
@@ -251,7 +251,7 @@ defmodule Membrane.RTSP.ServerLogicTest do
         }
       }
 
-      state = %{state | session_state: :ready, configured_media: configured_media}
+      state = %State{state | session_state: :ready, configured_media: configured_media}
 
       mock(FakeHandler, [respond: 2], fn ^configured_media, state ->
         {Response.new(200), state}
@@ -279,8 +279,8 @@ defmodule Membrane.RTSP.ServerLogicTest do
   end
 
   describe "handle TEARDOWN request" do
-    test "Re-initialize the session if it's not playing", %{state: state} do
-      state = %{
+    test "Re-initialize the session if it's not playing", %{state: %State{} = state} do
+      state = %State{
         state
         | session_state: :ready,
           configured_media: %{"control_path" => %{ssrc: 112_235}}
@@ -293,8 +293,8 @@ defmodule Membrane.RTSP.ServerLogicTest do
                |> Logic.process_request(state)
     end
 
-    test "free resources", %{state: state} do
-      state = %{state | session_state: :playing}
+    test "free resources", %{state: %State{} = state} do
+      state = %State{state | session_state: :playing}
 
       mock(FakeHandler, [respond: 2], fn nil, state -> {Response.new(200), state} end)
       mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "RTSP/1.0 200 OK" end)
@@ -304,8 +304,8 @@ defmodule Membrane.RTSP.ServerLogicTest do
                |> Logic.process_request(state)
     end
 
-    test "resets recording_with_tcp? flag", %{state: state} do
-      state = %{state | recording_with_tcp?: true, session_state: :playing}
+    test "resets recording_with_tcp? flag", %{state: %State{} = state} do
+      state = %State{state | recording_with_tcp?: true, session_state: :playing}
 
       mock(FakeHandler, [respond: 2], fn nil, state -> {Response.new(200), state} end)
       mock(:gen_tcp, [send: 2], fn %{}, response -> assert response =~ "RTSP/1.0 200 OK" end)
