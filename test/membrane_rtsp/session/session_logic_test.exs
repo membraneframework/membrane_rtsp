@@ -32,7 +32,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
          adds default headers and increments cseq every time a request is \
          resolved successfully\
          """,
-         %{state: state, request: request} do
+         %{state: %State{} = state, request: request} do
       mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
         assert String.contains?(serialized_request, "\r\nUser-Agent")
         mock_response(serialized_request)
@@ -41,7 +41,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
       assert {:reply, {:ok, _response}, next_state} =
                RTSP.handle_call({:execute, request}, nil, state)
 
-      assert next_state == %{state | cseq: state.cseq + 1}
+      assert next_state == %State{state | cseq: state.cseq + 1}
     end
 
     test "returns an error if response has different session", %{
@@ -55,8 +55,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
         RTSP.handle_call({:execute, %Request{method: "OPTIONS"}}, nil, state)
     end
 
-    test "preserves session_id", %{request: request, state: state} do
-      state = %{state | session_id: nil}
+    test "preserves session_id", %{request: request, state: %State{} = state} do
+      state = %State{state | session_id: nil}
       session_id = "arbitrary_string"
       request = request |> Request.with_header("Session", session_id)
 
@@ -73,9 +73,9 @@ defmodule Membrane.RTSP.SessionLogicTest do
                RTSP.handle_call({:execute, request}, nil, state)
     end
 
-    test "add session_id header to request", %{request: request, state: state} do
+    test "add session_id header to request", %{request: request, state: %State{} = state} do
       session_id = "arbitrary_string"
-      state = %{state | session_id: session_id}
+      state = %State{state | session_id: session_id}
 
       mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
         assert String.contains?(serialized_request, "\r\nSession: " <> session_id <> "\r\n")
@@ -87,7 +87,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
     end
 
     test "applies credentials to request if they were provided in the uri", %{
-      state: state,
+      state: %State{} = state,
       request: request
     } do
       credentials = "login:password"
@@ -103,13 +103,15 @@ defmodule Membrane.RTSP.SessionLogicTest do
       end)
 
       parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
-      state = %{state | uri: parsed_uri, auth: :basic}
+      state = %State{state | uri: parsed_uri, auth: :basic}
 
       assert {:reply, {:ok, _response}, _state} =
                RTSP.handle_call({:execute, request}, nil, state)
     end
 
-    test "does not apply credentials to request if they were already present", %{state: state} do
+    test "does not apply credentials to request if they were already present", %{
+      state: %State{} = state
+    } do
       request = %Request{method: "OPTIONS", headers: [{"Authorization", "Basic data"}]}
 
       mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
@@ -122,7 +124,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
       end)
 
       parsed_uri = URI.parse("rtsp://login:password@localhost:5554/vod/mp4:name.mov")
-      state = %{state | uri: parsed_uri}
+      state = %State{state | uri: parsed_uri}
 
       assert {:reply, {:ok, _response}, _state} =
                RTSP.handle_call({:execute, request}, nil, state)
@@ -140,7 +142,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
     assert state.auth == {:digest, %{nonce: "nonce", realm: "realm"}}
   end
 
-  test "digest auth", %{state: state, request: request} do
+  test "digest auth", %{state: %State{} = state, request: request} do
     credentials = "login:password"
 
     mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
@@ -155,7 +157,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
     parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
     digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm"}}
 
-    state = %{state | uri: parsed_uri, auth: digest_auth_options}
+    state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
     assert {:reply, {:ok, _response}, _state} = RTSP.handle_call({:execute, request}, nil, state)
   end
