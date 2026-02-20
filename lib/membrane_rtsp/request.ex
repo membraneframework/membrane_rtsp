@@ -172,12 +172,17 @@ defmodule Membrane.RTSP.Request do
   defp apply_path(%URI{} = base_url, %__MODULE__{path: nil}), do: base_url
 
   defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) do
-    URI.parse(path)
-    |> Map.get(:path)
-    |> Path.relative_to(base_url.path)
-    |> then(&Path.join(base_url.path, &1))
-    |> then(&Map.put(base_url, :path, &1))
-    |> URI.to_string()
+    %URI{} = parsed = URI.parse(path)
+
+    if parsed.host do
+      %URI{parsed | userinfo: nil} |> URI.to_string()
+    else
+      parsed.path
+      |> Path.relative_to(base_url.path)
+      |> then(&Path.join(base_url.path, &1))
+      |> then(&%URI{base_url | path: &1, query: nil})
+      |> URI.to_string()
+    end
   end
 
   defp render_headers([]), do: ""

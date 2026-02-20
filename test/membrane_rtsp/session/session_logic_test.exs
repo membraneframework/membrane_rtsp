@@ -139,10 +139,35 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
-    assert state.auth == {:digest, %{nonce: "nonce", realm: "realm"}}
+    assert state.auth == {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 2}}
   end
 
-  test "digest auth", %{state: %State{} = state, request: request} do
+  test "add digest information with qop in the state (RFC 2617)", %{
+    state: state,
+    request: request
+  } do
+    mock(:gen_tcp, [send: 2], fn _socket, _request ->
+      {:ok,
+       "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"VIVOTEK\", nonce=\"abc123\", qop=\"auth\"\r\n\r\n"}
+    end)
+
+    assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
+
+    assert state.auth == {:digest, %{nonce: "abc123", realm: "VIVOTEK", qop: "auth", nc: 2}}
+  end
+
+  test "add digest information with unquoted qop", %{state: state, request: request} do
+    mock(:gen_tcp, [send: 2], fn _socket, _request ->
+      {:ok,
+       "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"test\", nonce=\"xyz\", qop=auth\r\n\r\n"}
+    end)
+
+    assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
+
+    assert state.auth == {:digest, %{nonce: "xyz", realm: "test", qop: "auth", nc: 2}}
+  end
+
+  test "digest auth without qop (RFC 2069)", %{state: %State{} = state, request: request} do
     credentials = "login:password"
 
     mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
@@ -155,11 +180,40 @@ defmodule Membrane.RTSP.SessionLogicTest do
     end)
 
     parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
-    digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm"}}
+    digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 1}}
 
     state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
     assert {:reply, {:ok, _response}, _state} = RTSP.handle_call({:execute, request}, nil, state)
+  end
+
+  test "digest auth with qop (RFC 2617)", %{state: %State{} = state, request: request} do
+    credentials = "login:password"
+
+    mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+      # QOP auth includes: algorithm, qop, nc (8-digit hex), cnonce
+      assert String.contains?(serialized_request, "Authorization: Digest ")
+      assert String.contains?(serialized_request, "username=\"login\"")
+      assert String.contains?(serialized_request, "realm=\"realm\"")
+      assert String.contains?(serialized_request, "nonce=\"nonce\"")
+      assert String.contains?(serialized_request, "algorithm=MD5")
+      assert String.contains?(serialized_request, "qop=auth")
+      assert String.contains?(serialized_request, "nc=00000001")
+      assert String.contains?(serialized_request, "cnonce=")
+
+      mock_response(serialized_request)
+    end)
+
+    parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
+    digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm", qop: "auth", nc: 1}}
+
+    state = %State{state | uri: parsed_uri, auth: digest_auth_options}
+
+    assert {:reply, {:ok, _response}, new_state} =
+             RTSP.handle_call({:execute, request}, nil, state)
+
+    # nc should increment after successful request
+    assert {:digest, %{nc: 2}} = new_state.auth
   end
 
   defp mock_response(request) do

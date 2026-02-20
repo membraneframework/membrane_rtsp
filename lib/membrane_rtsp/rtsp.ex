@@ -21,7 +21,9 @@ defmodule Membrane.RTSP do
     @moduledoc false
     @type digest_opts() :: %{
             realm: String.t() | nil,
-            nonce: String.t() | nil
+            nonce: String.t() | nil,
+            qop: String.t() | nil,
+            nc: non_neg_integer()
           }
 
     @type auth() :: nil | :basic | {:digest, digest_opts()}
@@ -269,9 +271,16 @@ defmodule Membrane.RTSP do
          {:ok, state} <- handle_session_id(parsed_response, state),
          {:ok, %State{} = state} <- detect_authentication_type(parsed_response, state) do
       state = %State{state | cseq: state.cseq + 1}
+      state = increment_nc(state)
       {:ok, parsed_response, state}
     end
   end
+
+  defp increment_nc(%State{auth: {:digest, %{nc: nc} = opts}} = state) do
+    %State{state | auth: {:digest, %{opts | nc: nc + 1}}}
+  end
+
+  defp increment_nc(state), do: state
 
   @spec handle_execute_call(Request.t(), boolean(), State.t()) ::
           {:reply, Response.result(), State.t()}
@@ -311,6 +320,11 @@ defmodule Membrane.RTSP do
     encoded_uri = Request.process_uri(request, uri)
     ha1 = md5([username, options.realm, password])
     ha2 = md5([request.method, encoded_uri])
+
+    encode_digest_auth(username, encoded_uri, ha1, ha2, options)
+  end
+
+  defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: nil} = options) do
     response = md5([ha1, options.nonce, ha2])
 
     Enum.join(
@@ -324,6 +338,29 @@ defmodule Membrane.RTSP do
       ],
       " "
     )
+  end
+
+  defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: qop} = options) do
+    nc = options[:nc] || 1
+    nc_hex = :io_lib.format("~8.16.0b", [nc]) |> IO.iodata_to_binary()
+    cnonce = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
+    response = md5([ha1, options.nonce, nc_hex, cnonce, qop, ha2])
+
+    "Digest " <>
+      Enum.join(
+        [
+          ~s(username="#{username}"),
+          ~s(realm="#{options.realm}"),
+          ~s(nonce="#{options.nonce}"),
+          ~s(uri="#{encoded_uri}"),
+          ~s(response="#{response}"),
+          ~s(algorithm=MD5),
+          ~s(qop=#{qop}),
+          ~s(nc=#{nc_hex}),
+          ~s(cnonce="#{cnonce}")
+        ],
+        ","
+      )
   end
 
   @spec md5([String.t()]) :: String.t()
@@ -359,7 +396,14 @@ defmodule Membrane.RTSP do
     with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
       [_match, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
       [_match, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
-      auth_options = {:digest, %{nonce: nonce, realm: realm}}
+
+      qop =
+        case Regex.run(~r/qop=\"?([^",]+)\"?/, digest) do
+          [_match, qop_value] -> qop_value
+          nil -> nil
+        end
+
+      auth_options = {:digest, %{nonce: nonce, realm: realm, qop: qop, nc: 1}}
       {:ok, %{state | auth: auth_options}}
     else
       # non digest auth?
