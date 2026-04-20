@@ -89,11 +89,13 @@ defmodule Membrane.RTSP.MixProject do
 
   defp dialyzer() do
     opts = [
-      flags: [:error_handling]
+      flags: [:error_handling],
+      plt_add_apps: [:syntax_tools]
     ]
 
     if System.get_env("CI") == "true" do
       # Store PLTs in cacheable directory for CI
+      File.mkdir_p!(Path.join([__DIR__, "priv", "plts"]))
       [plt_local_path: "priv/plts", plt_core_path: "priv/plts"] ++ opts
     else
       opts
@@ -114,11 +116,11 @@ defmodule Membrane.RTSP.MixProject do
       {:bunch, "~> 1.6"},
       {:ex_sdp, "~> 0.17.0 or ~> 1.0"},
       {:nimble_parsec, "~> 1.4.0", runtime: false},
-      {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:mockery, "~> 2.3", runtime: false},
-      {:ex_doc, "~> 0.25", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:mix_test_watch, "~> 1.0", only: :dev, runtime: false},
-      {:credo, "~> 1.6", only: :dev, runtime: false}
+      {:credo, "~> 1.7", only: :dev, runtime: false}
     ]
   end
 end
