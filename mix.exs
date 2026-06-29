@@ -117,7 +117,7 @@ defmodule Membrane.RTSP.MixProject do
       {:nimble_parsec, "~> 1.4.0", runtime: false},
       {:dialyxir, ">= 0.0.0", only: [:dev], runtime: false},
       {:mockery, "~> 2.3", runtime: false},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
+      {:ex_doc, ">= 0.40.0", only: :dev, runtime: false},
       {:mix_test_watch, "~> 1.0", only: :dev, runtime: false},
       {:credo, ">= 0.0.0", only: :dev, runtime: false}
     ]
