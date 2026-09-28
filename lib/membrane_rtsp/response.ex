@@ -138,6 +138,8 @@ defmodule Membrane.RTSP.Response do
   @doc """
   Retrieves the first header matching given name from a response.
 
+  Header names are matched case-insensitively, as RFC 2326 requires.
+
   ```
     iex> response = %Response{
     ...>   status: 200,
@@ -153,8 +155,12 @@ defmodule Membrane.RTSP.Response do
 
   """
   @spec get_header(t(), binary()) :: {:error, :no_such_header} | {:ok, binary()}
-  def get_header(%__MODULE__{headers: headers}, name) do
-    case List.keyfind(headers, name, 0) do
+  def get_header(%__MODULE__{headers: headers}, name), do: find_header(headers, name)
+
+  defp find_header(headers, name) do
+    name = String.downcase(name, :ascii)
+
+    case Enum.find(headers, fn {key, _value} -> String.downcase(key, :ascii) == name end) do
       {_name, value} -> {:ok, value}
       nil -> {:error, :no_such_header}
     end
@@ -213,8 +219,8 @@ defmodule Membrane.RTSP.Response do
   end
 
   defp parse_body(data, headers) do
-    case List.keyfind(headers, "Content-Type", 0) do
-      {"Content-Type", "application/sdp"} ->
+    case find_header(headers, "Content-Type") do
+      {:ok, "application/sdp"} ->
         ExSDP.parse(data)
 
       _other ->

@@ -45,6 +45,36 @@ defmodule Membrane.RTSP.ResponseTest do
 
       assert headers == [{"CSeq", "0"}, {"Date", "Thu, 07 Mar 2019 05:36:09 GMT"}]
     end
+
+    test "parses sdp body when header names are not in canonical case" do
+      assert {:ok, %Response{body: %ExSDP{version: 0}}} =
+               """
+               RTSP/1.0 200 OK
+               CSeq: 2
+               Content-type: application/sdp
+               Content-length: 37
+
+               v=0
+               o=- 0 1 IN IP4 10.0.0.1
+               s=Cam
+               """
+               |> String.replace("\n", "\r\n")
+               |> Response.parse()
+    end
+  end
+
+  describe "Header lookup" do
+    test "get_header/2 matches header names case-insensitively" do
+      response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}
+
+      assert Response.get_header(response, "Content-Length") == {:ok, "0"}
+    end
+
+    test "verify_content_length/1 waits for the body when the header is not in canonical case" do
+      assert Response.verify_content_length(
+               "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-length: 296\r\n\r\n"
+             ) == {:error, 296, 0}
+    end
   end
 
   describe "Supports endline symbol" do
