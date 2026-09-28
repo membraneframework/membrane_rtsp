@@ -2,8 +2,6 @@ defmodule Membrane.RTSP.Server.Conn do
   @moduledoc false
   use GenServer
 
-  require Logger
-
   alias Membrane.RTSP.Request
   alias Membrane.RTSP.Server.Logic
 
