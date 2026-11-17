@@ -4,7 +4,7 @@ defmodule Membrane.RTSP.Transport do
 
   require Logger
 
-  alias Membrane.RTSP.Response
+  alias Membrane.RTSP.{Response, ServerRequest}
 
   @connection_timeout 1000
   @response_timeout 5000
@@ -36,11 +36,38 @@ defmodule Membrane.RTSP.Transport do
 
   def execute(request, socket, response_timeout, :external_process) do
     with :ok <- mockable(:gen_tcp).send(socket, request) do
-      receive do
-        {:raw_response, response} -> {:ok, response}
-      after
-        response_timeout || @response_timeout -> {:error, :timeout}
-      end
+      timeout = response_timeout || @response_timeout
+      await_response(socket, System.monotonic_time(:millisecond) + timeout)
+    end
+  end
+
+  @doc """
+  Answers a request that the server sent on the client's connection.
+  """
+  @spec reply_to_server_request(:gen_tcp.socket(), binary()) :: :ok
+  def reply_to_server_request(socket, request) do
+    case mockable(:gen_tcp).send(socket, ServerRequest.reply(request)) do
+      {:error, reason} ->
+        Logger.warning("Failed to answer a request of the RTSP server: #{inspect(reason)}")
+
+      _sent ->
+        :ok
+    end
+  end
+
+  # Waits for the response supplied by the process that reads the socket. Requests of
+  # the server that arrive in the meantime are answered and the wait goes on.
+  defp await_response(socket, deadline) do
+    receive do
+      {:raw_response, message} ->
+        if ServerRequest.request?(message) do
+          reply_to_server_request(socket, message)
+          await_response(socket, deadline)
+        else
+          {:ok, message}
+        end
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) -> {:error, :timeout}
     end
   end
 
@@ -50,33 +77,59 @@ defmodule Membrane.RTSP.Transport do
   end
 
   defp recv(socket, response_timeout, length \\ 0, acc \\ <<>>) do
-    case do_recv(socket, response_timeout, length, acc) do
-      # skip rtp/rtcp packets
-      {:ok, <<"$", _channel::8, size::16, _rtp::binary-size(size), rest::binary>>} ->
-        recv(socket, response_timeout, 0, rest)
+    with {:ok, data} <- do_recv(socket, response_timeout, length, acc) do
+      handle_received(data, socket, response_timeout)
+    end
+  end
 
-      {:ok, <<"$", _rest::binary>> = data} ->
-        recv(socket, response_timeout, 0, data)
+  defp handle_received(<<>>, socket, response_timeout) do
+    recv(socket, response_timeout)
+  end
 
-      {:ok, data} ->
-        case Response.verify_content_length(data) do
-          {:ok, _expected, _received} ->
-            {:ok, data}
+  # skip rtp/rtcp packets
+  defp handle_received(
+         <<"$", _channel::8, size::16, _rtp::binary-size(size), rest::binary>>,
+         socket,
+         response_timeout
+       ) do
+    handle_received(rest, socket, response_timeout)
+  end
 
-          {:error, expected, received} when received > expected ->
-            Logger.warning(
-              "Received #{received} bytes, but expected a body of #{expected} bytes. Truncating the response."
-            )
+  defp handle_received(<<"$", _rest::binary>> = data, socket, response_timeout) do
+    recv(socket, response_timeout, 0, data)
+  end
 
-            excess = received - expected
-            {:ok, :binary.part(data, 0, byte_size(data) - excess)}
+  defp handle_received(data, socket, response_timeout) do
+    case Response.verify_content_length(data) do
+      {:ok, _expected, _received} ->
+        handle_message(data, <<>>, socket, response_timeout)
 
-          {:error, expected, received} ->
-            recv(socket, response_timeout, expected - received, data)
-        end
+      {:error, expected, received} when received > expected ->
+        {message, rest} = :erlang.split_binary(data, byte_size(data) - (received - expected))
+        handle_message(message, rest, socket, response_timeout)
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, expected, received} ->
+        recv(socket, response_timeout, expected - received, data)
+    end
+  end
+
+  # A request of the server is answered and reading goes on with what follows it,
+  # anything else is the awaited response.
+  defp handle_message(message, rest, socket, response_timeout) do
+    cond do
+      ServerRequest.request?(message) ->
+        reply_to_server_request(socket, message)
+        handle_received(rest, socket, response_timeout)
+
+      rest == <<>> ->
+        {:ok, message}
+
+      true ->
+        Logger.warning(
+          "Received #{byte_size(rest)} bytes after the end of the response. Truncating the response."
+        )
+
+        {:ok, message}
     end
   end
 

@@ -6,7 +6,7 @@ defmodule Membrane.RTSP do
 
   require Logger
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP.{Request, Response, ServerRequest, Transport}
 
   @type t() :: pid()
 
@@ -97,6 +97,13 @@ defmodule Membrane.RTSP do
     GenServer.call(session, :get_socket)
   end
 
+  @doc """
+  Supplies the session with an RTSP message read from the socket by the process that
+  controls it (see `transfer_socket_control/2`).
+
+  The message is either the response to the request the session is waiting on, or a
+  request sent by the server, which the session answers on its own.
+  """
   @spec handle_response(t(), binary()) :: :ok
   def handle_response(session, raw_response) do
     send(session, {:raw_response, raw_response})
@@ -200,7 +207,14 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_info({:tcp, _socket, data}, state) do
-    Logger.warning("Received an unexpected packet, ignoring: #{inspect(data)}")
+    handle_unsolicited_message(data, state)
+    {:noreply, state}
+  end
+
+  # A message handed over with `handle_response/2` while no request is in progress.
+  @impl true
+  def handle_info({:raw_response, message}, state) do
+    handle_unsolicited_message(message, state)
     {:noreply, state}
   end
 
@@ -212,6 +226,19 @@ defmodule Membrane.RTSP do
   @impl true
   def terminate(_reason, state) do
     Transport.close(state.socket)
+  end
+
+  # Servers may send requests of their own, typically to check that the client is still
+  # there, and those are answered. Anything else that arrives while no request is in
+  # progress, such as a response that came after its request had timed out, is dropped.
+  @spec handle_unsolicited_message(binary(), State.t()) :: :ok
+  defp handle_unsolicited_message(message, %State{socket: socket}) do
+    if ServerRequest.request?(message) and
+         match?({:ok, _expected, _received}, Response.verify_content_length(message)) do
+      Transport.reply_to_server_request(socket, message)
+    else
+      Logger.warning("Received an unexpected packet, ignoring: #{inspect(message)}")
+    end
   end
 
   @spec do_start(binary() | URI.t(), options(), (module(), any() -> GenServer.on_start())) ::

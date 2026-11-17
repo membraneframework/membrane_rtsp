@@ -100,6 +100,9 @@ defmodule Membrane.RTSP.Response do
   Verifies if raw response binary has got proper length by comparing `Content-Length` header value to actual size of body in response.
   Returns tuple with verdict, expected size and actual size of body
 
+  Only the headers are inspected, not the start line, so this also tells where a
+  request sent by the server ends.
+
   Example responses:
   `{:ok, 512, 512}` - `Content-Length` header value and body size matched. A response is complete.
   `{:ok, 0, 0}` - `Content-Length` header missing or set to 0 and no body. A response is complete.
@@ -116,12 +119,16 @@ defmodule Membrane.RTSP.Response do
     headers = Enum.at(split_response, 0)
     body = Enum.at(split_response, 1)
 
-    with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
-         {:ok, headers} <- parse_headers(headers),
+    headers =
+      case String.split(headers, @line_ending, parts: 2) do
+        [_start_line, headers] -> headers
+        [_start_line] -> ""
+      end
+
+    with {:ok, headers} <- parse_headers(headers),
          false <- is_nil(body),
          body_size <- byte_size(body),
-         {:ok, content_length_str} <-
-           get_header(%__MODULE__{response | headers: headers}, "Content-Length") do
+         {:ok, content_length_str} <- find_header(headers, "Content-Length") do
       content_length = parse_content_length(content_length_str)
 
       if body_size == content_length do
