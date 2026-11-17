@@ -316,6 +316,34 @@ defmodule Membrane.RTSP.SessionLogicTest do
              ]
     end
 
+    # libavformat and gortsplib take a URL in the control attribute of the session for
+    # the base, before Content-Base (mediamtx#683: a Content-Base lacking the query)
+    test "gives way to a URL in the control attribute of the session", %{state: %State{} = state} do
+      sdp =
+        "v=0\r\ns=x\r\na=control:rtsp://localhost:5554/media/video1/?orig=1\r\nm=video 0 RTP/AVP 96\r\n"
+
+      mock_server(
+        [
+          "Content-Type: application/sdp",
+          "Content-Base: rtsp://localhost:5554/media/video1/",
+          "Content-Length: #{byte_size(sdp)}\r\n\r\n#{sdp}" |> String.trim_trailing("\r\n")
+        ],
+        fn url ->
+          if url == "rtsp://localhost:5554/media/video1/?orig=1/trackID=0", do: 200, else: 404
+        end
+      )
+
+      {200, state} =
+        execute(%State{state | uri: URI.parse("rtsp://localhost:5554/stream1")}, "DESCRIBE")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {200, _state} = execute(state, "SETUP", "trackID=0")
+      end)
+
+      assert List.last(request_lines()) ==
+               "SETUP rtsp://localhost:5554/media/video1/?orig=1/trackID=0 RTSP/1.0"
+    end
+
     # gortsplib puts a control that starts with "?" right behind the base (mediamtx#3517)
     test "takes a control path that is a query without a slash in between", %{
       state: %State{} = state

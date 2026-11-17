@@ -355,7 +355,7 @@ defmodule Membrane.RTSP do
   @spec store_content_base(Request.t(), Response.t(), State.t()) :: State.t()
   defp store_content_base(%Request{method: "DESCRIBE"}, %Response{} = response, %State{} = state) do
     with true <- Response.ok?(response),
-         {:ok, value} <- Response.get_header(response, "Content-Base"),
+         {:ok, value} <- base_url_of_description(response),
          %URI{scheme: scheme, host: host} = content_base
          when scheme in ["rtsp", "rtsps"] and is_binary(host) and host != "" <-
            URI.parse(String.trim(value)) do
@@ -366,6 +366,19 @@ defmodule Membrane.RTSP do
   end
 
   defp store_content_base(_request, _response, state), do: state
+
+  # A control attribute of the session that holds a URL names the base itself and
+  # goes before the Content-Base header, as in libavformat and gortsplib, which found
+  # servers whose Content-Base lacks a part of the URL that this attribute has.
+  @spec base_url_of_description(Response.t()) :: {:ok, binary()} | {:error, :no_such_header}
+  defp base_url_of_description(%Response{body: %ExSDP{} = sdp} = response) do
+    case ExSDP.get_attribute(sdp, "control") do
+      {"control", "rtsp" <> _rest = url} -> {:ok, url}
+      _other -> Response.get_header(response, "Content-Base")
+    end
+  end
+
+  defp base_url_of_description(response), do: Response.get_header(response, "Content-Base")
 
   # `SETUP` for a relative control path is first sent to the URL that this client has
   # always built: the session URL without its query, followed by the path. A server
