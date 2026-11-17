@@ -191,7 +191,9 @@ defmodule Membrane.RTSP.Response do
         [line, rest] -> {line, rest}
       end
 
-    case Regex.run(~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/, line) do
+    # The reason phrase is free text and may be empty (RFC 2326, section 7.1),
+    # so only the version and the status code are validated.
+    case Regex.run(~r/^RTSP\/(\d\.\d) (\d\d\d)(?: .*)?$/, line) do
       [_match, version, code] ->
         case Integer.parse(code) do
           :error ->
