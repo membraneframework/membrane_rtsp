@@ -231,9 +231,6 @@ defmodule Membrane.RTSP.ResponseTest do
     test "that is missing leaves a body that is not SDP unparsed" do
       assert {:ok, %Response{body: "packets_received: 10\r\n"}} =
                Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\npackets_received: 10\r\n")
-
-      assert {:ok, %Response{body: "v=0\r\nthis is not SDP\r\n"}} =
-               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\nv=0\r\nthis is not SDP\r\n")
     end
 
     test "leaves a body of another type unparsed" do
@@ -277,6 +274,66 @@ defmodule Membrane.RTSP.ResponseTest do
 
     test "returns an error when there is no Session header" do
       assert Response.parse_session_header(Response.new(200)) == {:error, :no_such_header}
+    end
+  end
+
+  describe "Session description" do
+    # What a camera may answer to DESCRIBE: the user name of the origin contains a
+    # space, the timing is repeated inside the media section, the bandwidth type is
+    # experimental and the substream announces a format that is not a payload type.
+    # libavformat and GStreamer accept all of it.
+    @camera_sdp """
+    v=0
+    o=RTSP Session 0 0 IN IP4 0.0.0.0
+    s=Media Server
+    c=IN IP4 0.0.0.0
+    t=0 0
+    a=control:*
+    m=video 0 RTP/AVP 96
+    t=0 0
+    b=X-AV:100
+    a=rtpmap:96 H264/90000
+    a=fmtp:96 packetization-mode=1;profile-level-id=4D001F;sprop-parameter-sets=Z00AH5WoFAFuQA==
+    a=control:trackID=0
+    m=application 0 RTP/AVP smart/1/90000
+    a=rtpmap:95 TP-LINK/90000
+    a=control:trackID=2
+    """
+
+    test "that breaks the SDP grammar is parsed as far as it can be" do
+      sdp = String.replace(@camera_sdp, "\n", "\r\n")
+
+      response =
+        "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/sdp\r\n" <>
+          "Content-Length: #{byte_size(sdp)}\r\n\r\n" <> sdp
+
+      assert {:error, _reason} = ExSDP.parse(sdp)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{status: 200, body: %ExSDP{media: [video, metadata]}}} =
+                   Response.parse(response)
+
+          assert %ExSDP.Attribute.RTPMapping{encoding: "H264", clock_rate: 90_000} =
+                   ExSDP.get_attribute(video, :rtpmap)
+
+          assert %ExSDP.Attribute.FMTP{packetization_mode: 1, sprop_parameter_sets: nil} =
+                   ExSDP.get_attribute(video, :fmtp)
+
+          assert {"control", "trackID=0"} = ExSDP.get_attribute(video, "control")
+          assert %ExSDP.Media{type: :application, fmt: "smart/1/90000"} = metadata
+        end)
+
+      # nothing is tolerated silently
+      for line <- [
+            "o=RTSP Session 0 0",
+            "t=0 0",
+            "b=X-AV:100",
+            "sprop-parameter-sets",
+            "smart/1/90000"
+          ] do
+        assert log =~ line
+      end
     end
   end
 

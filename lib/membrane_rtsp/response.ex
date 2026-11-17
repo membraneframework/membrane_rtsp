@@ -306,20 +306,25 @@ defmodule Membrane.RTSP.Response do
   defp parse_body(data, headers) do
     case find_header(headers, "Content-Type") do
       {:ok, content_type} ->
-        if sdp_content_type?(content_type), do: ExSDP.parse(data), else: {:ok, data}
+        if sdp_content_type?(content_type), do: parse_sdp(data), else: {:ok, data}
 
       # Some servers describe a stream without saying that the body is SDP.
       # A body that starts like a session description is given to the SDP parser;
       # if that fails, it is returned as it came, as any other untyped body.
       {:error, :no_such_header} ->
         with "v=" <> _rest <- data,
-             {:ok, sdp} <- ExSDP.parse(data) do
+             {:ok, sdp} <- parse_sdp(data) do
           {:ok, sdp}
         else
           _other -> {:ok, data}
         end
     end
   end
+
+  # Descriptions sent by cameras break the SDP grammar in many small ways that do not
+  # stop other clients from using the stream, so lines that cannot be parsed are
+  # skipped (and logged by the parser) instead of failing the whole response.
+  defp parse_sdp(data), do: ExSDP.parse(data, lenient: true)
 
   # The media type is case-insensitive and may be followed by parameters
   # (RFC 2616, section 3.7), e.g. "Application/SDP; charset=utf-8".
