@@ -301,8 +301,9 @@ defmodule Membrane.RTSP do
   end
 
   @spec do_apply_credentials(Request.t(), URI.t(), State.auth()) :: Request.t()
-  defp do_apply_credentials(request, %URI{userinfo: info}, :basic) do
-    encoded = Base.encode64(info)
+  defp do_apply_credentials(request, %URI{} = uri, :basic) do
+    {username, password} = credentials(uri)
+    encoded = Base.encode64(username <> ":" <> password)
     Request.with_header(request, "Authorization", "Basic " <> encoded)
   end
 
@@ -315,9 +316,20 @@ defmodule Membrane.RTSP do
     request
   end
 
+  # Reserved characters in the userinfo part of a URL are percent-encoded
+  # (RFC 3986, section 3.2.1), so the credentials are decoded before use.
+  # The password may be missing altogether.
+  @spec credentials(URI.t()) :: {username :: String.t(), password :: String.t()}
+  defp credentials(%URI{userinfo: userinfo}) do
+    case String.split(userinfo, ":", parts: 2) do
+      [username, password] -> {URI.decode(username), URI.decode(password)}
+      [username] -> {URI.decode(username), ""}
+    end
+  end
+
   @spec encode_digest(Request.t(), URI.t(), State.digest_opts()) :: String.t()
-  defp encode_digest(request, %URI{userinfo: userinfo} = uri, options) do
-    [username, password] = String.split(userinfo, ":", parts: 2)
+  defp encode_digest(request, %URI{} = uri, options) do
+    {username, password} = credentials(uri)
     encoded_uri = Request.process_uri(request, uri)
     ha1 = md5([username, options.realm, password])
     ha2 = md5([request.method, encoded_uri])
