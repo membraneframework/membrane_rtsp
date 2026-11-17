@@ -37,7 +37,9 @@ defmodule Membrane.RTSP do
             auth: auth(),
             response_timeout: non_neg_integer() | nil,
             receive_from: :socket | :external_process,
-            retries: non_neg_integer()
+            retries: non_neg_integer(),
+            content_base: binary() | nil,
+            append_control_to_base?: boolean()
           }
 
     @enforce_keys [:socket, :uri, :response_timeout]
@@ -47,7 +49,9 @@ defmodule Membrane.RTSP do
                   cseq: 0,
                   auth: nil,
                   receive_from: :socket,
-                  retries: 0
+                  retries: 0,
+                  content_base: nil,
+                  append_control_to_base?: false
                 ]
   end
 
@@ -162,8 +166,16 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
+  def handle_call({:execute, %Request{method: "SETUP"} = request}, _from, state) do
+    execute_setup(request, state)
+  end
+
+  @impl true
   def handle_call({:execute, request}, _from, state) do
-    handle_execute_call(request, true, state)
+    with {:reply, {:ok, %Response{} = response}, state} <-
+           handle_execute_call(request, true, state) do
+      {:reply, {:ok, response}, store_content_base(request, response, state)}
+    end
   end
 
   @impl true
@@ -297,6 +309,79 @@ defmodule Membrane.RTSP do
       end
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  # The DESCRIBE reply may name the URL that relative control URLs of the description
+  # are resolved against (RFC 2326, appendix C.1.1). It is kept for `SETUP`.
+  @spec store_content_base(Request.t(), Response.t(), State.t()) :: State.t()
+  defp store_content_base(%Request{method: "DESCRIBE"}, %Response{} = response, %State{} = state) do
+    with true <- Response.ok?(response),
+         {:ok, value} <- Response.get_header(response, "Content-Base"),
+         %URI{scheme: scheme, host: host} = content_base
+         when scheme in ["rtsp", "rtsps"] and is_binary(host) and host != "" <-
+           URI.parse(String.trim(value)) do
+      %State{state | content_base: URI.to_string(%URI{content_base | userinfo: nil})}
+    else
+      _other -> %State{state | content_base: nil}
+    end
+  end
+
+  defp store_content_base(_request, _response, state), do: state
+
+  # `SETUP` for a relative control path is first sent to the URL that this client has
+  # always built: the session URL without its query, followed by the path. A server
+  # that rejects it gets a second attempt with the path appended to the base URL as
+  # it stands: `Content-Base` if the server sent one, the session URL with its query
+  # otherwise. That is how libavformat, live555 and gortsplib build the URL in the
+  # first place. Once it has worked, the remaining tracks are set up the same way
+  # without the detour.
+  @spec execute_setup(Request.t(), State.t()) :: {:reply, Response.result(), State.t()}
+  defp execute_setup(%Request{} = request, %State{} = state) do
+    request_url = Request.process_uri(request, state.uri)
+
+    case appended_control_url(request, state) do
+      url when url in [nil, request_url] ->
+        handle_execute_call(request, true, state)
+
+      url when state.append_control_to_base? ->
+        handle_execute_call(%Request{request | path: url}, true, state)
+
+      url ->
+        with {:reply, {:ok, %Response{status: status}}, %State{} = state}
+             when status not in 200..299 and status not in [401, 461] <-
+               handle_execute_call(request, true, state) do
+          Logger.warning(
+            "SETUP of #{request_url} was rejected with status #{status}, " <>
+              "retrying with the control path appended to the base URL: #{url}"
+          )
+
+          retry_setup(%Request{request | path: url}, state)
+        end
+    end
+  end
+
+  @spec retry_setup(Request.t(), State.t()) :: {:reply, Response.result(), State.t()}
+  defp retry_setup(request, state) do
+    case handle_execute_call(request, true, state) do
+      {:reply, {:ok, %Response{status: status}} = result, %State{} = state}
+      when status in 200..299 ->
+        {:reply, result, %State{state | append_control_to_base?: true}}
+
+      other ->
+        other
+    end
+  end
+
+  @spec appended_control_url(Request.t(), State.t()) :: binary() | nil
+  defp appended_control_url(%Request{path: path}, _state) when path in [nil, "", "*"], do: nil
+
+  defp appended_control_url(%Request{path: path}, %State{uri: %URI{} = uri} = state) do
+    base = state.content_base || URI.to_string(%URI{uri | userinfo: nil})
+
+    case URI.parse(path) do
+      %URI{host: nil} -> String.trim_trailing(base, "/") <> "/" <> String.trim_leading(path, "/")
+      _absolute -> nil
     end
   end
 
