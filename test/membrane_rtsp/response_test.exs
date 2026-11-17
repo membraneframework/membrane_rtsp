@@ -153,6 +153,25 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "Truncated or garbled input" do
+    test "parse/1 does not raise when the blank line after the headers is missing" do
+      assert {:ok, %Response{status: 200, headers: [{"CSeq", "1"}], body: ""}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 1\r\n")
+    end
+
+    test "verify_content_length/1 treats an unparsable Content-Length as absent" do
+      assert Response.verify_content_length(
+               "RTSP/1.0 200 OK\r\nCSeq: 1\r\nContent-Length: abc\r\n\r\n"
+             ) ==
+               {:ok, 0, 0}
+
+      assert Response.verify_content_length(
+               "RTSP/1.0 200 OK\r\nCSeq: 1\r\nContent-Length: -5\r\n\r\n"
+             ) ==
+               {:ok, 0, 0}
+    end
+  end
+
   describe "Header lookup" do
     test "get_header/2 matches header names case-insensitively" do
       response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}

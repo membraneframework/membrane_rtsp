@@ -59,7 +59,11 @@ defmodule Membrane.RTSP.Response do
   """
   @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | term()}
   def parse(response) do
-    [headers, body] = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
+    {headers, body} =
+      case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
+        [headers, body] -> {headers, body}
+        [headers] -> {headers, ""}
+      end
 
     with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
          {:ok, headers} <- parse_headers(headers),
@@ -118,7 +122,7 @@ defmodule Membrane.RTSP.Response do
          body_size <- byte_size(body),
          {:ok, content_length_str} <-
            get_header(%__MODULE__{response | headers: headers}, "Content-Length") do
-      {content_length, _remainder} = Integer.parse(content_length_str)
+      content_length = parse_content_length(content_length_str)
 
       if body_size == content_length do
         {:ok, content_length, body_size}
@@ -237,6 +241,19 @@ defmodule Membrane.RTSP.Response do
     end)
     |> Enum.reverse()
     |> then(&{:ok, &1})
+  end
+
+  # A value that is not a non-negative integer is treated as no body at all,
+  # which is what libavformat does, instead of raising on input from the network.
+  defp parse_content_length(value) do
+    case Integer.parse(value) do
+      {content_length, _remainder} when content_length >= 0 ->
+        content_length
+
+      _other ->
+        Logger.warning("Ignoring an invalid Content-Length header: #{inspect(value)}")
+        0
+    end
   end
 
   defp parse_body(data, headers) do
