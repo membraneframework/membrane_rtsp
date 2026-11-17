@@ -167,6 +167,78 @@ defmodule Membrane.RTSP.SessionLogicTest do
     assert state.auth == {:digest, %{nonce: "xyz", realm: "test", qop: "auth", nc: 2}}
   end
 
+  describe "WWW-Authenticate challenge" do
+    defp authenticate(state, request, www_authenticate_headers) do
+      headers = Enum.map_join(www_authenticate_headers, &"WWW-Authenticate: #{&1}\r\n")
+
+      mock(:gen_tcp, [send: 2], fn _socket, _request ->
+        {:ok, "RTSP/1.0 200 OK\r\n#{headers}\r\n"}
+      end)
+
+      assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
+      state.auth
+    end
+
+    # RFC 2617 section 1.2: parameter values are either tokens or quoted strings.
+    test "with unquoted parameter values is understood", %{state: state, request: request} do
+      assert authenticate(state, request, ["Digest realm=cam, nonce=abc123"]) ==
+               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+    end
+
+    test "is understood whatever the case of the scheme and of parameter names",
+         %{state: state, request: request} do
+      assert authenticate(state, request, [~s(digest Realm="cam", NONCE="abc123")]) ==
+               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+
+      assert authenticate(state, request, [~s(DIGEST realm = "cam" ,nonce = "abc123")]) ==
+               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+    end
+
+    test "offering Basic before Digest selects Digest", %{state: state, request: request} do
+      assert authenticate(state, request, [
+               ~s(Basic realm="cam"),
+               ~s(Digest realm="cam", nonce="abc123")
+             ]) == {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+    end
+
+    test "with an unsupported digest algorithm is skipped for one that is supported",
+         %{state: state, request: request} do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert authenticate(state, request, [
+                   ~s(Digest realm="cam", nonce="sha", algorithm=SHA-256),
+                   ~s(Digest realm="cam", nonce="md5", algorithm=MD5)
+                 ]) == {:digest, %{nonce: "md5", realm: "cam", qop: nil, nc: 2}}
+        end)
+
+      assert log =~ "SHA-256"
+    end
+
+    test "that cannot be used for Digest falls back to Basic without raising",
+         %{state: state, request: request} do
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert authenticate(state, request, [~s(Digest realm="cam")]) == :basic
+
+        assert authenticate(state, request, [~s(Digest realm="cam", nonce="x", algorithm=SHA-256)]) ==
+                 :basic
+
+        assert authenticate(state, request, ["Digest"]) == :basic
+      end)
+    end
+
+    test "listing several qop values selects auth", %{state: state, request: request} do
+      assert {:digest, %{qop: "auth"}} =
+               authenticate(state, request, [
+                 ~s(Digest realm="cam", nonce="n", qop="auth-int,auth")
+               ])
+
+      assert {:digest, %{qop: "auth"}} =
+               authenticate(state, request, [
+                 ~s(Digest realm="cam", nonce="n", qop="auth, auth-int")
+               ])
+    end
+  end
+
   test "digest auth without qop (RFC 2069)", %{state: %State{} = state, request: request} do
     credentials = "login:password"
 

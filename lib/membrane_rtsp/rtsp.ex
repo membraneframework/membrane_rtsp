@@ -389,29 +389,105 @@ defmodule Membrane.RTSP do
     end
   end
 
-  # Checks for the `nonce` and `realm` values in the `WWW-Authenticate` header.
-  # if they exist, sets `type` to `{:digest, opts}`
+  # Picks the authentication scheme from the `WWW-Authenticate` challenges of a response.
+  #
+  # A server may send several challenges, one per header (RFC 2617, section 1.2).
+  # Digest is preferred over Basic whatever their order. Scheme and parameter names are
+  # case-insensitive and values may be quoted strings or bare tokens.
   @spec detect_authentication_type(Response.t(), State.t()) :: {:ok, State.t()}
-  defp detect_authentication_type(%Response{} = response, state) do
-    with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
-      [_match, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
-      [_match, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
+  defp detect_authentication_type(%Response{headers: headers}, state) do
+    challenges =
+      for {name, value} <- headers,
+          String.downcase(name, :ascii) == "www-authenticate",
+          do: parse_challenge(value)
 
-      qop =
-        case Regex.run(~r/qop=\"?([^",]+)\"?/, digest) do
-          [_match, qop_value] -> qop_value
-          nil -> nil
-        end
+    case challenges do
+      [] -> {:ok, state}
+      challenges -> {:ok, %{state | auth: select_auth(challenges)}}
+    end
+  end
 
-      auth_options = {:digest, %{nonce: nonce, realm: realm, qop: qop, nc: 1}}
-      {:ok, %{state | auth: auth_options}}
+  @spec parse_challenge(binary()) :: {scheme :: binary(), params :: %{binary() => binary()}}
+  defp parse_challenge(challenge) do
+    {scheme, params} =
+      case String.split(String.trim(challenge), ~r/\s+/, parts: 2) do
+        [scheme, params] -> {scheme, params}
+        [scheme] -> {scheme, ""}
+      end
+
+    params =
+      ~r/([A-Za-z0-9_-]+)\s*=\s*(?:"([^"]*)"|([^\s,]*))/
+      |> Regex.scan(params)
+      |> Map.new(fn
+        [_match, name, quoted] -> {String.downcase(name, :ascii), quoted}
+        [_match, name, _empty, token] -> {String.downcase(name, :ascii), token}
+      end)
+
+    {String.downcase(scheme, :ascii), params}
+  end
+
+  @spec select_auth([{binary(), map()}]) :: State.auth()
+  defp select_auth(challenges) do
+    digest =
+      Enum.find_value(challenges, fn
+        {"digest", params} -> digest_options(params)
+        _other -> nil
+      end)
+
+    cond do
+      digest != nil ->
+        {:digest, digest}
+
+      List.keymember?(challenges, "basic", 0) ->
+        :basic
+
+      true ->
+        schemes = Enum.map_join(challenges, ", ", &elem(&1, 0))
+
+        Logger.warning(
+          "No usable authentication challenge among: #{schemes}, falling back to Basic"
+        )
+
+        :basic
+    end
+  end
+
+  @spec digest_options(map()) :: State.digest_opts() | nil
+  defp digest_options(params) do
+    algorithm = params["algorithm"]
+
+    cond do
+      params["nonce"] in [nil, ""] ->
+        Logger.warning("Ignoring a Digest challenge without a nonce")
+        nil
+
+      algorithm != nil and String.upcase(algorithm, :ascii) != "MD5" ->
+        Logger.warning("Ignoring a Digest challenge with unsupported algorithm #{algorithm}")
+        nil
+
+      true ->
+        %{
+          nonce: params["nonce"],
+          realm: params["realm"] || "",
+          qop: select_qop(params["qop"]),
+          nc: 1
+        }
+    end
+  end
+
+  # Only `auth` is implemented. When the server offers a list, `auth` is taken from it;
+  # when it offers none we can do, the RFC 2069 response without qop is used.
+  @spec select_qop(binary() | nil) :: binary() | nil
+  defp select_qop(nil), do: nil
+
+  defp select_qop(qop) do
+    options = qop |> String.split(",") |> Enum.map(&String.trim/1)
+
+    if "auth" in options do
+      "auth"
     else
-      # non digest auth?
-      {:ok, _non_digest} ->
-        {:ok, %{state | auth: :basic}}
-
-      {:error, :no_such_header} ->
-        {:ok, state}
+      Logger.warning("Unsupported Digest qop #{inspect(qop)}, authenticating without qop")
+      nil
     end
   end
 end
