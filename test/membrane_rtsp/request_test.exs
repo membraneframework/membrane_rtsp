@@ -101,6 +101,23 @@ defmodule Membrane.RTSP.RequestTest do
     end
   end
 
+  describe "Control path with a query" do
+    # mediamtx#3517: a camera whose controls are "?ctype=video" and "?ctype=audio"
+    test "that is a query alone is put behind the session URL" do
+      uri = URI.parse("rtsp://192.168.1.10:554/live/ch0")
+
+      assert "SETUP rtsp://192.168.1.10:554/live/ch0?ctype=video RTSP/1.0\r\n\r\n" ==
+               Request.stringify(%Request{method: "SETUP", path: "?ctype=video"}, uri)
+    end
+
+    test "keeps its query, unlike the session URL" do
+      uri = URI.parse("rtsp://192.168.1.10:554/live/ch0?profile=1")
+
+      assert "SETUP rtsp://192.168.1.10:554/live/ch0/trackID=0?token=abc RTSP/1.0\r\n\r\n" ==
+               Request.stringify(%Request{method: "SETUP", path: "trackID=0?token=abc"}, uri)
+    end
+  end
+
   describe "Control path that names no stream of its own" do
     # A media section may have no a=control at all (RFC 2326, appendix C.3) or
     # carry "*", which stands for the URL of the presentation (appendix C.1.1).

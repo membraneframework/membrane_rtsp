@@ -417,9 +417,16 @@ defmodule Membrane.RTSP do
   defp appended_control_url(%Request{path: path}, %State{uri: %URI{} = uri} = state) do
     base = state.content_base || URI.to_string(%URI{uri | userinfo: nil})
 
-    case URI.parse(path) do
-      %URI{host: nil} -> String.trim_trailing(base, "/") <> "/" <> String.trim_leading(path, "/")
-      _absolute -> nil
+    case {URI.parse(path), path} do
+      # a control that is only a query is put right behind the base (as in gortsplib)
+      {%URI{host: nil}, "?" <> _query} ->
+        base <> path
+
+      {%URI{host: nil}, _path} ->
+        String.trim_trailing(base, "/") <> "/" <> String.trim_leading(path, "/")
+
+      _absolute ->
+        nil
     end
   end
 

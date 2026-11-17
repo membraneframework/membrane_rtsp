@@ -316,6 +316,25 @@ defmodule Membrane.RTSP.SessionLogicTest do
              ]
     end
 
+    # gortsplib puts a control that starts with "?" right behind the base (mediamtx#3517)
+    test "takes a control path that is a query without a slash in between", %{
+      state: %State{} = state
+    } do
+      mock_server(["Content-Base: rtsp://localhost:5554/live/main"], fn url ->
+        if url == "rtsp://localhost:5554/live/main?ctype=video", do: 200, else: 404
+      end)
+
+      {200, state} =
+        execute(%State{state | uri: URI.parse("rtsp://localhost:5554/live")}, "DESCRIBE")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {200, _state} = execute(state, "SETUP", "?ctype=video")
+      end)
+
+      assert [_describe, "SETUP rtsp://localhost:5554/live?ctype=video RTSP/1.0", _retried] =
+               request_lines()
+    end
+
     test "is not tried when it cannot give another URL or another URL cannot help",
          %{state: %State{} = state} do
       plain = "rtsp://localhost:5554/live"

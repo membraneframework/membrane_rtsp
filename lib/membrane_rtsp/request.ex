@@ -177,14 +177,21 @@ defmodule Membrane.RTSP.Request do
   defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) do
     %URI{} = parsed = URI.parse(path)
 
-    if parsed.host do
-      %URI{parsed | userinfo: nil} |> URI.to_string()
-    else
-      parsed.path
-      |> Path.relative_to(base_url.path)
-      |> then(&Path.join(base_url.path, &1))
-      |> then(&%URI{base_url | path: &1, query: nil})
-      |> URI.to_string()
+    cond do
+      parsed.host ->
+        %URI{parsed | userinfo: nil} |> URI.to_string()
+
+      # the control path is a query alone, for example "?ctype=video"
+      parsed.path == nil ->
+        %URI{base_url | query: parsed.query} |> URI.to_string()
+
+      true ->
+        parsed.path
+        |> Path.relative_to(base_url.path)
+        |> then(&Path.join(base_url.path, &1))
+        # the query of the session URL is not carried over, the one of the control path is
+        |> then(&%URI{base_url | path: &1, query: parsed.query})
+        |> URI.to_string()
     end
   end
 
