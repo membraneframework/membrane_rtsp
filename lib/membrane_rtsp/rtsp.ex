@@ -6,7 +6,7 @@ defmodule Membrane.RTSP do
 
   require Logger
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Response, ServerRequest, Transport}
+  alias Membrane.RTSP.{Request, Response, Transport}
 
   @type t() :: pid()
 
@@ -245,11 +245,9 @@ defmodule Membrane.RTSP do
   # progress, such as a response that came after its request had timed out, is dropped.
   @spec handle_unsolicited_message(binary(), State.t()) :: :ok
   defp handle_unsolicited_message(message, %State{socket: socket}) do
-    if ServerRequest.request?(message) and
-         match?({:ok, _expected, _received}, Response.verify_content_length(message)) do
-      Transport.reply_to_server_request(socket, message)
-    else
-      Logger.warning("Received an unexpected packet, ignoring: #{inspect(message)}")
+    case Transport.reply_to_server_requests(socket, message) do
+      <<>> -> :ok
+      rest -> Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
     end
   end
 

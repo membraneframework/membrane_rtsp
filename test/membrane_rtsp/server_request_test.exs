@@ -30,9 +30,12 @@ defmodule Membrane.RTSP.ServerRequestTest do
     Task.async(fn -> RTSP.options(session) end)
   end
 
-  defp receive_from_client(server) do
-    {:ok, data} = :gen_tcp.recv(server, 0, 1_000)
-    data
+  # the two replies may arrive in one read or in two
+  defp receive_from_client(server, timeout \\ 1_000) do
+    case :gen_tcp.recv(server, 0, timeout) do
+      {:ok, data} -> data
+      {:error, :timeout} -> ""
+    end
   end
 
   describe "while the session reads the socket itself" do
@@ -96,6 +99,23 @@ defmodule Membrane.RTSP.ServerRequestTest do
         end)
 
       assert log =~ "REDIRECT"
+    end
+
+    test "a request arriving in one segment after the awaited response is answered", ctx do
+      task = request(ctx.session)
+      assert "OPTIONS " <> _rest = receive_from_client(ctx.server)
+
+      :ok = :gen_tcp.send(ctx.server, "RTSP/1.0 200 OK\r\nCSeq: 0\r\n\r\n" <> @ping)
+      assert {:ok, %RTSP.Response{status: 200}} = Task.await(task)
+      assert receive_from_client(ctx.server) == @ping_reply
+    end
+
+    test "two requests arriving in one segment when no response is awaited are both answered",
+         ctx do
+      :ok = :gen_tcp.send(ctx.server, @ping <> String.replace(@ping, "CSeq: 77", "CSeq: 78"))
+
+      assert receive_from_client(ctx.server) <> receive_from_client(ctx.server, 300) ==
+               @ping_reply <> String.replace(@ping_reply, "CSeq: 77", "CSeq: 78")
     end
 
     test "a request arriving when no response is awaited is answered", ctx do

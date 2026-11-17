@@ -55,6 +55,35 @@ defmodule Membrane.RTSP.Transport do
     end
   end
 
+  @doc """
+  Answers the complete requests of the server that the data starts with and returns
+  what follows them.
+  """
+  @spec reply_to_server_requests(:gen_tcp.socket(), binary()) :: binary()
+  def reply_to_server_requests(socket, data) do
+    with true <- ServerRequest.request?(data),
+         {request, rest} <- split_message(data) do
+      reply_to_server_request(socket, request)
+      reply_to_server_requests(socket, rest)
+    else
+      _not_a_complete_request -> data
+    end
+  end
+
+  # Splits the first RTSP message off the data, if all of it is there.
+  defp split_message(data) do
+    case Response.verify_content_length(data) do
+      {:ok, _expected, _received} ->
+        {data, <<>>}
+
+      {:error, expected, received} when received > expected ->
+        :erlang.split_binary(data, byte_size(data) - (received - expected))
+
+      {:error, _expected, _received} ->
+        nil
+    end
+  end
+
   # Waits for the response supplied by the process that reads the socket. Requests of
   # the server that arrive in the meantime are answered and the wait goes on.
   defp await_response(socket, deadline) do
@@ -124,10 +153,17 @@ defmodule Membrane.RTSP.Transport do
       rest == <<>> ->
         {:ok, message}
 
+      # what follows the response may be requests of the server, which are answered
       true ->
-        Logger.warning(
-          "Received #{byte_size(rest)} bytes after the end of the response. Truncating the response."
-        )
+        case reply_to_server_requests(socket, rest) do
+          <<>> ->
+            :ok
+
+          rest ->
+            Logger.warning(
+              "Received #{byte_size(rest)} bytes after the end of the response. Truncating the response."
+            )
+        end
 
         {:ok, message}
     end
