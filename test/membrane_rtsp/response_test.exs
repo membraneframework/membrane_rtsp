@@ -166,12 +166,19 @@ defmodule Membrane.RTSP.ResponseTest do
       assert Response.verify_content_length(request <> "ping$") == {:error, 4, 5}
     end
 
-    test "keeps waiting while the headers are incomplete" do
-      assert Response.verify_content_length("RTSP/1.0 200 OK\r\nCSeq: 5\r\nContent-Le") ==
-               {:error, 0, 0}
+    test "keeps waiting while the headers are incomplete, without complaining about them" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert Response.verify_content_length("RTSP/1.0 200 OK\r\nCSeq: 5\r\nContent-Le") ==
+                   {:error, 0, 0}
 
-      assert Response.verify_content_length("GET_PARAMETER rtsp://cam/stream RTSP/1.0\r\n") ==
-               {:error, 0, 0}
+          assert Response.verify_content_length("RTSP/1.0 200 OK\r\nCSe") == {:error, 0, 0}
+
+          assert Response.verify_content_length("GET_PARAMETER rtsp://cam/stream RTSP/1.0\r\n") ==
+                   {:error, 0, 0}
+        end)
+
+      assert log == ""
     end
   end
 

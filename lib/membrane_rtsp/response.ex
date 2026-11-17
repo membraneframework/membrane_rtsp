@@ -115,36 +115,30 @@ defmodule Membrane.RTSP.Response do
   @spec verify_content_length(binary()) ::
           {:ok | :error, expected_size :: non_neg_integer(), actual_size :: non_neg_integer()}
   def verify_content_length(response) do
-    split_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
-    headers = Enum.at(split_response, 0)
-    body = Enum.at(split_response, 1)
-
-    headers =
-      case String.split(headers, @line_ending, parts: 2) do
-        [_start_line, headers] -> headers
-        [_start_line] -> ""
-      end
-
-    with {:ok, headers} <- parse_headers(headers),
-         false <- is_nil(body),
-         body_size <- byte_size(body),
-         {:ok, content_length_str} <- find_header(headers, "Content-Length") do
-      content_length = parse_content_length(content_length_str)
-
-      if body_size == content_length do
-        {:ok, content_length, body_size}
-      else
-        {:error, content_length, body_size}
-      end
-    else
-      {:error, :no_such_header} when byte_size(body) == 0 ->
-        {:ok, 0, 0}
-
-      {:error, :no_such_header} ->
-        {:error, 0, byte_size(body)}
-
-      _other ->
+    case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
+      # The headers have not arrived in full yet, so nothing can be said about them.
+      [_incomplete_headers] ->
         {:error, 0, 0}
+
+      [headers, body] ->
+        headers =
+          case String.split(headers, @line_ending, parts: 2) do
+            [_start_line, headers] -> headers
+            [_start_line] -> ""
+          end
+
+        # lines that are not headers are reported when the message is parsed, not here
+        {:ok, headers} = parse_headers(headers, false)
+
+        content_length =
+          case find_header(headers, "Content-Length") do
+            {:ok, content_length} -> parse_content_length(content_length)
+            {:error, :no_such_header} -> 0
+          end
+
+        if byte_size(body) == content_length,
+          do: {:ok, content_length, byte_size(body)},
+          else: {:error, content_length, byte_size(body)}
     end
   end
 
@@ -266,7 +260,7 @@ defmodule Membrane.RTSP.Response do
   # of whitespace may surround the value, the value may be empty and it may continue
   # on following lines that start with a space or a tab. Lines that are not headers
   # at all are skipped, so that one of them does not cost the whole response.
-  defp parse_headers(headers) do
+  defp parse_headers(headers, log_malformed? \\ true) do
     headers
     |> String.split(@line_ending)
     |> Enum.reduce([], fn
@@ -282,13 +276,18 @@ defmodule Membrane.RTSP.Response do
             [{name, String.trim(value)} | acc]
 
           _other ->
-            Logger.warning("Ignoring a malformed RTSP header line: #{inspect(line)}")
+            log_malformed_header(line, log_malformed?)
             acc
         end
     end)
     |> Enum.reverse()
     |> then(&{:ok, &1})
   end
+
+  defp log_malformed_header(line, true),
+    do: Logger.warning("Ignoring a malformed RTSP header line: #{inspect(line)}")
+
+  defp log_malformed_header(_line, false), do: :ok
 
   # A value that is not a non-negative integer is treated as no body at all,
   # which is what libavformat does, instead of raising on input from the network.
