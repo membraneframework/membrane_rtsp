@@ -411,6 +411,21 @@ defmodule Membrane.RTSP.SessionLogicTest do
       end)
     end
 
+    # RFC 2617 section 1.2 allows several challenges in one header, comma-separated
+    test "sharing a header with another one is told apart from it", %{
+      state: state,
+      request: request
+    } do
+      assert authenticate(state, request, [
+               ~s(Digest realm="digest-realm", nonce="abc", qop="auth", Basic realm="basic-realm")
+             ]) == {:digest, %{nonce: "abc", realm: "digest-realm", qop: "auth", nc: 2}}
+
+      assert authenticate(state, request, [~s(Basic realm="r", Digest realm="r", nonce="abc")]) ==
+               {:digest, %{nonce: "abc", realm: "r", qop: nil, nc: 2}}
+
+      assert authenticate(state, request, [~s(Basic realm="r", Negotiate)]) == :basic
+    end
+
     test "listing several qop values selects auth", %{state: state, request: request} do
       assert {:digest, %{qop: "auth"}} =
                authenticate(state, request, [

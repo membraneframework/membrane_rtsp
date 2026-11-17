@@ -564,7 +564,8 @@ defmodule Membrane.RTSP do
     challenges =
       for {name, value} <- headers,
           String.downcase(name, :ascii) == "www-authenticate",
-          do: parse_challenge(value)
+          challenge <- parse_challenges(value),
+          do: challenge
 
     case challenges do
       [] -> {:ok, state}
@@ -572,23 +573,31 @@ defmodule Membrane.RTSP do
     end
   end
 
-  @spec parse_challenge(binary()) :: {scheme :: binary(), params :: %{binary() => binary()}}
-  defp parse_challenge(challenge) do
-    {scheme, params} =
-      case String.split(String.trim(challenge), ~r/\s+/, parts: 2) do
-        [scheme, params] -> {scheme, params}
-        [scheme] -> {scheme, ""}
+  # A header usually carries one challenge, but may carry several, separated by commas
+  # like the parameters are (RFC 2617, section 1.2). A new challenge starts where a
+  # scheme name stands in front of a parameter. Within a challenge the first
+  # occurrence of a parameter counts.
+  @spec parse_challenges(binary()) :: [{scheme :: binary(), params :: %{binary() => binary()}}]
+  defp parse_challenges(header) do
+    ~r/(?:([A-Za-z][A-Za-z0-9_-]*)[ \t]+)?([A-Za-z0-9_-]+)[ \t]*=[ \t]*(?:"([^"]*)"|([^\s,]*))/
+    |> Regex.scan(header)
+    |> Enum.reduce([], fn [_match, scheme, name | value], challenges ->
+      param = {String.downcase(name, :ascii), List.last(value)}
+
+      case {scheme, challenges} do
+        {"", [{scheme, params} | rest]} -> [{scheme, [param | params]} | rest]
+        {"", []} -> []
+        {scheme, challenges} -> [{String.downcase(scheme, :ascii), [param]} | challenges]
       end
+    end)
+    |> case do
+      # a scheme alone, without any parameter
+      [] ->
+        [{header |> String.trim() |> String.downcase(:ascii), %{}}]
 
-    params =
-      ~r/([A-Za-z0-9_-]+)\s*=\s*(?:"([^"]*)"|([^\s,]*))/
-      |> Regex.scan(params)
-      |> Map.new(fn
-        [_match, name, quoted] -> {String.downcase(name, :ascii), quoted}
-        [_match, name, _empty, token] -> {String.downcase(name, :ascii), token}
-      end)
-
-    {String.downcase(scheme, :ascii), params}
+      challenges ->
+        for {scheme, params} <- Enum.reverse(challenges), do: {scheme, Map.new(params)}
+    end
   end
 
   @spec select_auth([{binary(), map()}]) :: State.auth()
