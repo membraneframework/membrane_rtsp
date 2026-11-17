@@ -20,10 +20,11 @@ defmodule Membrane.RTSP do
   defmodule State do
     @moduledoc false
     @type digest_opts() :: %{
-            realm: String.t() | nil,
-            nonce: String.t() | nil,
-            qop: String.t() | nil,
-            nc: non_neg_integer()
+            required(:realm) => String.t() | nil,
+            required(:nonce) => String.t() | nil,
+            required(:qop) => String.t() | nil,
+            required(:nc) => non_neg_integer(),
+            optional(:opaque) => String.t()
           }
 
     @type auth() :: nil | :basic | {:digest, digest_opts()}
@@ -327,17 +328,17 @@ defmodule Membrane.RTSP do
   defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: nil} = options) do
     response = md5([ha1, options.nonce, ha2])
 
-    Enum.join(
-      [
-        "Digest",
-        ~s(username="#{username}",),
-        ~s(realm="#{options.realm}",),
-        ~s(nonce="#{options.nonce}",),
-        ~s(uri="#{encoded_uri}",),
-        ~s(response="#{response}")
-      ],
-      " "
-    )
+    "Digest " <>
+      Enum.join(
+        [
+          ~s(username="#{username}"),
+          ~s(realm="#{options.realm}"),
+          ~s(nonce="#{options.nonce}"),
+          ~s(uri="#{encoded_uri}"),
+          ~s(response="#{response}")
+        ] ++ opaque_param(options),
+        ", "
+      )
   end
 
   defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: qop} = options) do
@@ -358,10 +359,13 @@ defmodule Membrane.RTSP do
           ~s(qop=#{qop}),
           ~s(nc=#{nc_hex}),
           ~s(cnonce="#{cnonce}")
-        ],
+        ] ++ opaque_param(options),
         ","
       )
   end
+
+  defp opaque_param(%{opaque: opaque}), do: [~s(opaque="#{opaque}")]
+  defp opaque_param(_options), do: []
 
   @spec md5([String.t()]) :: String.t()
   defp md5(value) do
@@ -466,12 +470,18 @@ defmodule Membrane.RTSP do
         nil
 
       true ->
-        %{
+        options = %{
           nonce: params["nonce"],
           realm: params["realm"] || "",
           qop: select_qop(params["qop"]),
           nc: 1
         }
+
+        # The server expects `opaque` back unchanged (RFC 2617, section 3.2.1).
+        case params["opaque"] do
+          nil -> options
+          opaque -> Map.put(options, :opaque, opaque)
+        end
     end
   end
 

@@ -288,6 +288,38 @@ defmodule Membrane.RTSP.SessionLogicTest do
     assert {:digest, %{nc: 2}} = new_state.auth
   end
 
+  describe "Digest opaque" do
+    # RFC 2617 section 3.2.1: the opaque value should be returned by the client unchanged.
+    test "is stored when the challenge carries it", %{state: state, request: request} do
+      mock(:gen_tcp, [send: 2], fn _socket, _request ->
+        {:ok,
+         "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"cam\", nonce=\"n\", opaque=\"5ccc069c\"\r\n\r\n"}
+      end)
+
+      assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
+
+      assert state.auth ==
+               {:digest, %{nonce: "n", realm: "cam", qop: nil, nc: 2, opaque: "5ccc069c"}}
+    end
+
+    test "is echoed in the Authorization header", %{state: %State{} = state, request: request} do
+      parsed_uri = URI.parse("rtsp://login:password@localhost:5554/vod/mp4:name.mov")
+
+      for qop <- [nil, "auth"] do
+        mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+          assert serialized_request =~ ~s(opaque="5ccc069c")
+          mock_response(serialized_request)
+        end)
+
+        auth = {:digest, %{nonce: "n", realm: "cam", qop: qop, nc: 1, opaque: "5ccc069c"}}
+        state = %State{state | uri: parsed_uri, auth: auth}
+
+        assert {:reply, {:ok, _response}, _state} =
+                 RTSP.handle_call({:execute, request}, nil, state)
+      end
+    end
+  end
+
   defp mock_response(request) do
     [_line, rest] = String.split(request, "\r\n", parts: 2)
     {:ok, @response_header <> rest}
