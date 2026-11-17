@@ -199,6 +199,21 @@ defmodule Membrane.RTSP.ResponseTest do
       end
     end
 
+    # GStreamer assumes SDP when a DESCRIBE reply has no Content-Type, and
+    # libavformat never looks at the header at all.
+    test "that is missing does not prevent an SDP body from being parsed" do
+      assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Length: 37\r\n\r\n" <> @sdp)
+    end
+
+    test "that is missing leaves a body that is not SDP unparsed" do
+      assert {:ok, %Response{body: "packets_received: 10\r\n"}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\npackets_received: 10\r\n")
+
+      assert {:ok, %Response{body: "v=0\r\nthis is not SDP\r\n"}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\nv=0\r\nthis is not SDP\r\n")
+    end
+
     test "leaves a body of another type unparsed" do
       assert {:ok, %Response{body: "v=0\r\n"}} =
                Response.parse(

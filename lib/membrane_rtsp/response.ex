@@ -301,8 +301,16 @@ defmodule Membrane.RTSP.Response do
       {:ok, content_type} ->
         if sdp_content_type?(content_type), do: ExSDP.parse(data), else: {:ok, data}
 
+      # Some servers describe a stream without saying that the body is SDP.
+      # A body that starts like a session description is given to the SDP parser;
+      # if that fails, it is returned as it came, as any other untyped body.
       {:error, :no_such_header} ->
-        {:ok, data}
+        with "v=" <> _rest <- data,
+             {:ok, sdp} <- ExSDP.parse(data) do
+          {:ok, sdp}
+        else
+          _other -> {:ok, data}
+        end
     end
   end
 
