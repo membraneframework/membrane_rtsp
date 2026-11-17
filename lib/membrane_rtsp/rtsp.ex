@@ -24,7 +24,8 @@ defmodule Membrane.RTSP do
             required(:nonce) => String.t() | nil,
             required(:qop) => String.t() | nil,
             required(:nc) => non_neg_integer(),
-            optional(:opaque) => String.t()
+            optional(:opaque) => String.t(),
+            optional(:algorithm) => String.t()
           }
 
     @type auth() :: nil | :basic | {:digest, digest_opts()}
@@ -416,14 +417,14 @@ defmodule Membrane.RTSP do
   defp encode_digest(request, %URI{} = uri, options) do
     {username, password} = credentials(uri)
     encoded_uri = Request.process_uri(request, uri)
-    ha1 = md5([username, options.realm, password])
-    ha2 = md5([request.method, encoded_uri])
+    ha1 = digest_hash([username, options.realm, password], options)
+    ha2 = digest_hash([request.method, encoded_uri], options)
 
     encode_digest_auth(username, encoded_uri, ha1, ha2, options)
   end
 
   defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: nil} = options) do
-    response = md5([ha1, options.nonce, ha2])
+    response = digest_hash([ha1, options.nonce, ha2], options)
 
     "Digest " <>
       Enum.join(
@@ -433,7 +434,7 @@ defmodule Membrane.RTSP do
           ~s(nonce="#{options.nonce}"),
           ~s(uri="#{encoded_uri}"),
           ~s(response="#{response}")
-        ] ++ opaque_param(options),
+        ] ++ algorithm_param(options, nil) ++ opaque_param(options),
         ", "
       )
   end
@@ -442,7 +443,7 @@ defmodule Membrane.RTSP do
     nc = options[:nc] || 1
     nc_hex = :io_lib.format("~8.16.0b", [nc]) |> IO.iodata_to_binary()
     cnonce = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
-    response = md5([ha1, options.nonce, nc_hex, cnonce, qop, ha2])
+    response = digest_hash([ha1, options.nonce, nc_hex, cnonce, qop, ha2], options)
 
     "Digest " <>
       Enum.join(
@@ -451,12 +452,14 @@ defmodule Membrane.RTSP do
           ~s(realm="#{options.realm}"),
           ~s(nonce="#{options.nonce}"),
           ~s(uri="#{encoded_uri}"),
-          ~s(response="#{response}"),
-          ~s(algorithm=MD5),
-          ~s(qop=#{qop}),
-          ~s(nc=#{nc_hex}),
-          ~s(cnonce="#{cnonce}")
-        ] ++ opaque_param(options),
+          ~s(response="#{response}")
+        ] ++
+          algorithm_param(options, qop) ++
+          [
+            ~s(qop=#{qop}),
+            ~s(nc=#{nc_hex}),
+            ~s(cnonce="#{cnonce}")
+          ] ++ opaque_param(options),
         ","
       )
   end
@@ -464,13 +467,23 @@ defmodule Membrane.RTSP do
   defp opaque_param(%{opaque: opaque}), do: [~s(opaque="#{opaque}")]
   defp opaque_param(_options), do: []
 
-  @spec md5([String.t()]) :: String.t()
-  defp md5(value) do
-    value
-    |> Enum.join(":")
-    |> IO.iodata_to_binary()
-    |> :erlang.md5()
-    |> Base.encode16(case: :lower)
+  # The algorithm is sent back only when the server named one: servers that do not
+  # know the parameter reject a request that carries it unprompted. An MD5 challenge
+  # without qop is answered in the RFC 2069 form, which has no such parameter.
+  defp algorithm_param(%{algorithm: algorithm} = options, qop) do
+    if qop != nil or sha256?(options), do: [~s(algorithm=#{algorithm})], else: []
+  end
+
+  defp algorithm_param(_options, _qop), do: []
+
+  defp sha256?(%{algorithm: algorithm}), do: String.upcase(algorithm, :ascii) == "SHA-256"
+  defp sha256?(_options), do: false
+
+  @spec digest_hash([String.t()], State.digest_opts()) :: String.t()
+  defp digest_hash(values, options) do
+    data = Enum.join(values, ":")
+    hash = if sha256?(options), do: :crypto.hash(:sha256, data), else: :erlang.md5(data)
+    Base.encode16(hash, case: :lower)
   end
 
   # Some responses do not have to return the Session ID.
@@ -541,11 +554,11 @@ defmodule Membrane.RTSP do
 
   @spec select_auth([{binary(), map()}]) :: State.auth()
   defp select_auth(challenges) do
-    digest =
-      Enum.find_value(challenges, fn
-        {"digest", params} -> digest_options(params)
-        _other -> nil
-      end)
+    digests = for {"digest", params} <- challenges, options = digest_options(params), do: options
+
+    # MD5 is what this client has always answered with, so it stays the first choice.
+    # SHA-256 (RFC 7616) is used when the server offers nothing else.
+    digest = Enum.find(digests, &(not sha256?(&1))) || List.first(digests)
 
     cond do
       digest != nil ->
@@ -574,7 +587,7 @@ defmodule Membrane.RTSP do
         Logger.warning("Ignoring a Digest challenge without a nonce")
         nil
 
-      algorithm != nil and String.upcase(algorithm, :ascii) != "MD5" ->
+      algorithm != nil and String.upcase(algorithm, :ascii) not in ["MD5", "SHA-256"] ->
         Logger.warning("Ignoring a Digest challenge with unsupported algorithm #{algorithm}")
         nil
 
@@ -586,11 +599,12 @@ defmodule Membrane.RTSP do
           nc: 1
         }
 
-        # The server expects `opaque` back unchanged (RFC 2617, section 3.2.1).
-        case params["opaque"] do
-          nil -> options
-          opaque -> Map.put(options, :opaque, opaque)
-        end
+        # The server expects `opaque` back unchanged (RFC 2617, section 3.2.1),
+        # and `algorithm` only when it named one.
+        Enum.reduce([opaque: params["opaque"], algorithm: algorithm], options, fn
+          {_key, nil}, options -> options
+          {key, value}, options -> Map.put(options, key, value)
+        end)
     end
   end
 

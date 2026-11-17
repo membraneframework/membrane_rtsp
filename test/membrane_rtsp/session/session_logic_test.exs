@@ -371,17 +371,31 @@ defmodule Membrane.RTSP.SessionLogicTest do
              ]) == {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
     end
 
-    test "with an unsupported digest algorithm is skipped for one that is supported",
-         %{state: state, request: request} do
+    test "naming MD5 is preferred to one naming SHA-256", %{state: state, request: request} do
+      assert authenticate(state, request, [
+               ~s(Digest realm="cam", nonce="sha", algorithm=SHA-256),
+               ~s(Digest realm="cam", nonce="md5", algorithm=MD5)
+             ]) == {:digest, %{nonce: "md5", realm: "cam", qop: nil, nc: 2, algorithm: "MD5"}}
+    end
+
+    # gortsplib#1074: cameras with their SHA-256 option enabled offer nothing else.
+    test "naming only SHA-256 is accepted", %{state: state, request: request} do
+      assert authenticate(state, request, [
+               ~s(Digest realm="cam", nonce="sha", algorithm="sha-256")
+             ]) ==
+               {:digest, %{nonce: "sha", realm: "cam", qop: nil, nc: 2, algorithm: "sha-256"}}
+    end
+
+    test "with an unsupported digest algorithm is skipped", %{state: state, request: request} do
       log =
         ExUnit.CaptureLog.capture_log(fn ->
           assert authenticate(state, request, [
-                   ~s(Digest realm="cam", nonce="sha", algorithm=SHA-256),
-                   ~s(Digest realm="cam", nonce="md5", algorithm=MD5)
+                   ~s(Digest realm="cam", nonce="x", algorithm=SHA-512-256),
+                   ~s(Digest realm="cam", nonce="md5")
                  ]) == {:digest, %{nonce: "md5", realm: "cam", qop: nil, nc: 2}}
         end)
 
-      assert log =~ "SHA-256"
+      assert log =~ "SHA-512-256"
     end
 
     test "that cannot be used for Digest falls back to Basic without raising",
@@ -389,8 +403,9 @@ defmodule Membrane.RTSP.SessionLogicTest do
       ExUnit.CaptureLog.capture_log(fn ->
         assert authenticate(state, request, [~s(Digest realm="cam")]) == :basic
 
-        assert authenticate(state, request, [~s(Digest realm="cam", nonce="x", algorithm=SHA-256)]) ==
-                 :basic
+        assert authenticate(state, request, [
+                 ~s(Digest realm="cam", nonce="x", algorithm=MD5-sess)
+               ]) == :basic
 
         assert authenticate(state, request, ["Digest"]) == :basic
       end)
@@ -433,12 +448,13 @@ defmodule Membrane.RTSP.SessionLogicTest do
     credentials = "login:password"
 
     mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
-      # QOP auth includes: algorithm, qop, nc (8-digit hex), cnonce
+      # QOP auth includes: qop, nc (8-digit hex), cnonce
       assert String.contains?(serialized_request, "Authorization: Digest ")
       assert String.contains?(serialized_request, "username=\"login\"")
       assert String.contains?(serialized_request, "realm=\"realm\"")
       assert String.contains?(serialized_request, "nonce=\"nonce\"")
-      assert String.contains?(serialized_request, "algorithm=MD5")
+      # the challenge named no algorithm, so none is sent back
+      refute String.contains?(serialized_request, "algorithm=")
       assert String.contains?(serialized_request, "qop=auth")
       assert String.contains?(serialized_request, "nc=00000001")
       assert String.contains?(serialized_request, "cnonce=")
@@ -487,6 +503,52 @@ defmodule Membrane.RTSP.SessionLogicTest do
         assert {:reply, {:ok, _response}, _state} =
                  RTSP.handle_call({:execute, request}, nil, state)
       end
+    end
+  end
+
+  describe "Digest algorithm" do
+    @uri "rtsp://login:password@localhost:5554/vod/mp4:name.mov"
+
+    defp authorization(%State{} = state, request, digest_options) do
+      mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+        [authorization] = Regex.run(~r/Authorization: [^\r]*/, serialized_request)
+        send(self(), {:authorization, authorization})
+        mock_response(serialized_request)
+      end)
+
+      state = %State{state | uri: URI.parse(@uri), auth: {:digest, digest_options}}
+
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
+
+      assert_received {:authorization, authorization}
+      authorization
+    end
+
+    # mediamtx#3115: cameras that do not know the parameter answer 401 when it is sent
+    # unprompted, so it is only echoed.
+    test "is sent back only when the challenge named one", %{
+      state: %State{} = state,
+      request: request
+    } do
+      options = %{nonce: "nonce", realm: "realm", qop: "auth", nc: 1}
+
+      refute authorization(state, request, options) =~ "algorithm"
+      assert authorization(state, request, Map.put(options, :algorithm, "MD5")) =~ "algorithm=MD5"
+    end
+
+    test "SHA-256 is used for the response when the challenge asks for it",
+         %{state: %State{} = state, request: request} do
+      sha256 = fn data -> :crypto.hash(:sha256, data) |> Base.encode16(case: :lower) end
+      ha1 = sha256.("login:realm:password")
+      ha2 = sha256.("OPTIONS:rtsp://localhost:5554/vod/mp4:name.mov")
+      response = sha256.("#{ha1}:nonce:#{ha2}")
+
+      options = %{nonce: "nonce", realm: "realm", qop: nil, nc: 1, algorithm: "SHA-256"}
+      authorization = authorization(state, request, options)
+
+      assert authorization =~ ~s(response="#{response}")
+      assert authorization =~ "algorithm=SHA-256"
     end
   end
 
