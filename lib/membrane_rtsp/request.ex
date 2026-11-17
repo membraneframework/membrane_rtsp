@@ -169,7 +169,10 @@ defmodule Membrane.RTSP.Request do
     apply_path(%URI{uri | userinfo: nil}, request)
   end
 
-  defp apply_path(%URI{} = base_url, %__MODULE__{path: nil}), do: base_url
+  # A missing control attribute and "*" both stand for the presentation itself
+  # (RFC 2326, appendix C.1.1 and C.3).
+  defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) when path in [nil, "", "*"],
+    do: base_url
 
   defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) do
     %URI{} = parsed = URI.parse(path)
