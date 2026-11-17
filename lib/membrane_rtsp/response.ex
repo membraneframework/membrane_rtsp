@@ -173,6 +173,46 @@ defmodule Membrane.RTSP.Response do
   end
 
   @doc """
+  Parses the `Session` header of a response.
+
+  Returns the session identifier and the session timeout in seconds, or `nil`
+  for the timeout when the server did not announce a usable one. A client should
+  send a request more often than that, otherwise the server may close the session
+  (RFC 2326, section 12.37).
+
+  ```
+    iex> response = Response.new(200) |> Response.with_header("Session", "12345678;timeout=60")
+    iex> Response.parse_session_header(response)
+    {:ok, %{session_id: "12345678", timeout: 60}}
+    iex> Response.parse_session_header(Response.new(200))
+    {:error, :no_such_header}
+
+  ```
+  """
+  @spec parse_session_header(t()) ::
+          {:ok, %{session_id: binary(), timeout: pos_integer() | nil}}
+          | {:error, :no_such_header}
+  def parse_session_header(%__MODULE__{} = response) do
+    with {:ok, value} <- get_header(response, "Session") do
+      [session_id | params] = value |> String.split(";") |> Enum.map(&String.trim/1)
+
+      {:ok, %{session_id: session_id, timeout: Enum.find_value(params, &parse_session_timeout/1)}}
+    end
+  end
+
+  # The parameter name is matched case-insensitively and whitespace around "=" is
+  # allowed, as libavformat and live555 do.
+  defp parse_session_timeout(param) do
+    with [name, value] <- String.split(param, "=", parts: 2),
+         "timeout" <- name |> String.trim() |> String.downcase(:ascii),
+         {timeout, _rest} when timeout > 0 <- value |> String.trim() |> Integer.parse() do
+      timeout
+    else
+      _other -> nil
+    end
+  end
+
+  @doc """
   Returns true if the response is a success.
 
   ```

@@ -167,6 +167,43 @@ defmodule Membrane.RTSP.SessionLogicTest do
     assert state.auth == {:digest, %{nonce: "xyz", realm: "test", qop: "auth", nc: 2}}
   end
 
+  describe "Session header" do
+    defp respond_with(headers) do
+      mock(:gen_tcp, [send: 2], fn _socket, _request ->
+        {:ok, "RTSP/1.0 200 OK\r\n" <> Enum.map_join(headers, &(&1 <> "\r\n")) <> "\r\n"}
+      end)
+    end
+
+    test "is stripped of its parameters and of surrounding whitespace",
+         %{state: %State{} = state, request: request} do
+      respond_with(["Session:  12345678 ; timeout=60"])
+
+      assert {:reply, {:ok, _response}, state} =
+               RTSP.handle_call({:execute, request}, nil, %State{state | session_id: nil})
+
+      assert state.session_id == "12345678"
+    end
+
+    # libavformat keeps the first session id it was given and GStreamer the last one;
+    # neither fails the request, which a strict comparison did.
+    test "carrying another session id does not fail the request", %{
+      state: state,
+      request: request
+    } do
+      respond_with(["Session: another_session"])
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:reply, {:ok, %RTSP.Response{status: 200}}, state} =
+                   RTSP.handle_call({:execute, request}, nil, state)
+
+          assert state.session_id == "fake_session"
+        end)
+
+      assert log =~ "another_session"
+    end
+  end
+
   describe "WWW-Authenticate challenge" do
     defp authenticate(state, request, www_authenticate_headers) do
       headers = Enum.map_join(www_authenticate_headers, &"WWW-Authenticate: #{&1}\r\n")

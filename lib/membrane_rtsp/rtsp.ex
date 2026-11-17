@@ -388,20 +388,32 @@ defmodule Membrane.RTSP do
     |> Base.encode16(case: :lower)
   end
 
-  # Some responses do not have to return the Session ID
-  # If it does return one, it needs to match one stored in the state.
-  @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()} | {:error, reason :: any()}
+  # Some responses do not have to return the Session ID.
+  # The first one received is used for the rest of the session. A server that later
+  # answers with a different one is not failed for it: libavformat keeps the first
+  # identifier as well, and failing here would cost a reply that is otherwise fine.
+  @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()}
   defp handle_session_id(%Response{} = response, %State{} = state) do
-    with {:ok, session_value} <- Response.get_header(response, "Session") do
-      [session_id | _rest] = String.split(session_value, ";")
+    case Response.parse_session_header(response) do
+      {:ok, %{session_id: session_id}} ->
+        case state do
+          %State{session_id: nil} ->
+            {:ok, %State{state | session_id: session_id}}
 
-      case state do
-        %State{session_id: nil} -> {:ok, %State{state | session_id: session_id}}
-        %State{session_id: ^session_id} -> {:ok, state}
-        _else -> {:error, :invalid_session_id}
-      end
-    else
-      {:error, :no_such_header} -> {:ok, state}
+          %State{session_id: ^session_id} ->
+            {:ok, state}
+
+          %State{session_id: current_session_id} ->
+            Logger.warning(
+              "Server answered with session id #{inspect(session_id)}, " <>
+                "keeping #{inspect(current_session_id)} that was established first"
+            )
+
+            {:ok, state}
+        end
+
+      {:error, :no_such_header} ->
+        {:ok, state}
     end
   end
 

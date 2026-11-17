@@ -207,6 +207,42 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "parse_session_header/1" do
+    defp session(value), do: %Response{status: 200, version: "1.0", headers: [{"Session", value}]}
+
+    test "returns the session id and the timeout" do
+      assert Response.parse_session_header(session("12345678;timeout=60")) ==
+               {:ok, %{session_id: "12345678", timeout: 60}}
+    end
+
+    test "returns no timeout when the server does not announce one" do
+      assert Response.parse_session_header(session("12345678")) ==
+               {:ok, %{session_id: "12345678", timeout: nil}}
+    end
+
+    test "tolerates whitespace and case in the parameters" do
+      for value <- [
+            "12345678; timeout=60",
+            "12345678 ;Timeout = 60",
+            " 12345678;foo=bar;TIMEOUT=60 "
+          ] do
+        assert Response.parse_session_header(session(value)) ==
+                 {:ok, %{session_id: "12345678", timeout: 60}}
+      end
+    end
+
+    test "ignores a timeout that is not a positive number" do
+      for value <- ["12345678;timeout=0", "12345678;timeout=soon", "12345678;timeout="] do
+        assert Response.parse_session_header(session(value)) ==
+                 {:ok, %{session_id: "12345678", timeout: nil}}
+      end
+    end
+
+    test "returns an error when there is no Session header" do
+      assert Response.parse_session_header(Response.new(200)) == {:error, :no_such_header}
+    end
+  end
+
   describe "Header lookup" do
     test "get_header/2 matches header names case-insensitively" do
       response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}
