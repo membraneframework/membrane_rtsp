@@ -258,12 +258,19 @@ defmodule Membrane.RTSP.Response do
 
   defp parse_body(data, headers) do
     case find_header(headers, "Content-Type") do
-      {:ok, "application/sdp"} ->
-        ExSDP.parse(data)
+      {:ok, content_type} ->
+        if sdp_content_type?(content_type), do: ExSDP.parse(data), else: {:ok, data}
 
-      _other ->
+      {:error, :no_such_header} ->
         {:ok, data}
     end
+  end
+
+  # The media type is case-insensitive and may be followed by parameters
+  # (RFC 2616, section 3.7), e.g. "Application/SDP; charset=utf-8".
+  defp sdp_content_type?(content_type) do
+    [media_type | _parameters] = String.split(content_type, ";", parts: 2)
+    media_type |> String.trim() |> String.downcase(:ascii) == "application/sdp"
   end
 
   defp render_headers([]), do: ""

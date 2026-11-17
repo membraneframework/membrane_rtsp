@@ -172,6 +172,41 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "Content-Type" do
+    @sdp "v=0\r\no=- 0 1 IN IP4 10.0.0.1\r\ns=Cam\r\n"
+
+    # RFC 2616 section 3.7: the type and subtype are case-insensitive and may be
+    # followed by parameters.
+    test "selects the SDP parser regardless of case" do
+      for content_type <- ["Application/SDP", "APPLICATION/SDP", "application/Sdp"] do
+        assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
+                 Response.parse(
+                   "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: #{content_type}\r\n\r\n" <> @sdp
+                 )
+      end
+    end
+
+    test "selects the SDP parser when it carries parameters" do
+      for content_type <- [
+            "application/sdp; charset=utf-8",
+            "application/sdp;charset=UTF-8",
+            "application/sdp ;q=1"
+          ] do
+        assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
+                 Response.parse(
+                   "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: #{content_type}\r\n\r\n" <> @sdp
+                 )
+      end
+    end
+
+    test "leaves a body of another type unparsed" do
+      assert {:ok, %Response{body: "v=0\r\n"}} =
+               Response.parse(
+                 "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/sdpx\r\n\r\nv=0\r\n"
+               )
+    end
+  end
+
   describe "Header lookup" do
     test "get_header/2 matches header names case-insensitively" do
       response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}
