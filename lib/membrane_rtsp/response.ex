@@ -3,6 +3,8 @@ defmodule Membrane.RTSP.Response do
   This module represents a RTSP response.
   """
 
+  require Logger
+
   @line_ending ["\r\n", "\r", "\n"]
 
   @enforce_keys [:status, :version]
@@ -55,7 +57,7 @@ defmodule Membrane.RTSP.Response do
   If the body is present it will be parsed according to `Content-Type` header.
   Currently only the `application/sdp` is supported.
   """
-  @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | :malformed_header}
+  @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | term()}
   def parse(response) do
     [headers, body] = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
 
@@ -209,15 +211,32 @@ defmodule Membrane.RTSP.Response do
     end
   end
 
+  # Header syntax follows RFC 2616, section 4.2 (referenced by RFC 2326): any amount
+  # of whitespace may surround the value, the value may be empty and it may continue
+  # on following lines that start with a space or a tab. Lines that are not headers
+  # at all are skipped, so that one of them does not cost the whole response.
   defp parse_headers(headers) do
     headers
     |> String.split(@line_ending)
-    |> Bunch.Enum.try_map(fn header ->
-      case String.split(header, ":", parts: 2) do
-        [name, " " <> value] -> {:ok, {name, value}}
-        _else -> {:error, {:malformed_header, header}}
-      end
+    |> Enum.reduce([], fn
+      "", acc ->
+        acc
+
+      <<char, _rest::binary>> = line, [{name, value} | acc] when char in [?\s, ?\t] ->
+        [{name, String.trim(value <> " " <> String.trim(line))} | acc]
+
+      line, acc ->
+        case String.split(line, ":", parts: 2) do
+          [name, value] when name != "" ->
+            [{name, String.trim(value)} | acc]
+
+          _other ->
+            Logger.warning("Ignoring a malformed RTSP header line: #{inspect(line)}")
+            acc
+        end
     end)
+    |> Enum.reverse()
+    |> then(&{:ok, &1})
   end
 
   defp parse_body(data, headers) do
