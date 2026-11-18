@@ -24,9 +24,7 @@ defmodule Membrane.RTSP do
           | {:user_agent, binary()}
 
   @default_rtsp_port 554
-  # the most that is kept of a request of the server while its end is awaited
   @max_unsolicited_data_size 4096
-  # a longer challenge is not worth the time that reading it could take
   @max_challenge_size 4096
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
@@ -225,8 +223,6 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_info({:tcp, _socket, data}, %State{} = state) do
-    # A request of the server may come in more than one segment, so its beginning
-    # is kept until the rest arrives.
     case handle_unsolicited_message(state.unsolicited_data <> data, state) do
       <<>> ->
         {:noreply, %State{state | unsolicited_data: <<>>}}
@@ -241,7 +237,6 @@ defmodule Membrane.RTSP do
     end
   end
 
-  # A message handed over with `handle_response/2` while no request is in progress.
   @impl true
   def handle_info({:raw_response, message}, state) do
     case handle_unsolicited_message(message, state) do
@@ -273,9 +268,6 @@ defmodule Membrane.RTSP do
     Transport.close(state.socket)
   end
 
-  # Servers may send requests of their own, typically to check that the client is still
-  # there, and those are answered. Anything else that arrives while no request is in
-  # progress, such as a response that came after its request had timed out, is dropped.
   @spec handle_unsolicited_message(binary(), State.t()) :: binary()
   defp handle_unsolicited_message(message, %State{socket: socket}) do
     Transport.reply_to_server_requests(socket, message)
@@ -367,7 +359,6 @@ defmodule Membrane.RTSP do
           {:reply, Response.result(), State.t()}
   defp handle_execute_call(request, retry, %State{} = state) do
     result = execute(request, state)
-    # what had arrived before the request went into the reading of its response
     state = %State{state | unsolicited_data: <<>>}
 
     with {:ok, raw_response} <- result,
@@ -384,8 +375,6 @@ defmodule Membrane.RTSP do
     end
   end
 
-  # The DESCRIBE reply may name the URL that relative control URLs of the description
-  # are resolved against (RFC 2326, appendix C.1.1). It is kept for `SETUP`.
   @spec store_content_base(Request.t(), Response.t(), State.t()) :: State.t()
   defp store_content_base(%Request{method: "DESCRIBE"}, %Response{} = response, %State{} = state) do
     with true <- Response.ok?(response),
@@ -414,13 +403,8 @@ defmodule Membrane.RTSP do
 
   defp base_url_of_description(response), do: Response.get_header(response, "Content-Base")
 
-  # `SETUP` for a relative control path is first sent to the URL that this client has
-  # always built: the session URL without its query, followed by the path. A server
-  # that rejects it gets a second attempt with the path appended to the base URL as
-  # it stands: `Content-Base` if the server sent one, the session URL with its query
-  # otherwise. That is how libavformat, live555 and gortsplib build the URL in the
-  # first place. Once it has worked, the remaining tracks are set up the same way
-  # without the detour.
+  # The URL that this client has always built is tried first. If the server rejects it,
+  # the control path is appended to the base URL instead, and that form is kept once it works.
   @spec execute_setup(Request.t(), State.t()) :: {:reply, Response.result(), State.t()}
   defp execute_setup(%Request{} = request, %State{} = state) do
     request_url = Request.process_uri(request, state.uri)
@@ -465,7 +449,6 @@ defmodule Membrane.RTSP do
     base = state.content_base || URI.to_string(%URI{uri | userinfo: nil})
 
     case {URI.parse(path), path} do
-      # a control that is only a query is put right behind the base (as in gortsplib)
       {%URI{host: nil}, "?" <> _query} ->
         base <> path
 
@@ -493,9 +476,6 @@ defmodule Membrane.RTSP do
     request
   end
 
-  # Reserved characters in the userinfo part of a URL are percent-encoded
-  # (RFC 3986, section 3.2.1), so the credentials are decoded before use.
-  # The password may be missing altogether.
   @spec credentials(URI.t()) :: {username :: String.t(), password :: String.t()}
   defp credentials(%URI{userinfo: userinfo}) do
     case String.split(userinfo, ":", parts: 2) do
@@ -558,9 +538,7 @@ defmodule Membrane.RTSP do
   defp opaque_param(%{opaque: opaque}), do: [~s(opaque="#{opaque}")]
   defp opaque_param(_options), do: []
 
-  # The algorithm is sent back only when the server named one: servers that do not
-  # know the parameter reject a request that carries it unprompted. An MD5 challenge
-  # without qop is answered in the RFC 2069 form, which has no such parameter.
+  # Servers that do not know `algorithm` reject a request that carries it unprompted.
   defp algorithm_param(%{algorithm: algorithm} = options, qop) do
     if qop != nil or sha256?(options), do: [~s(algorithm=#{algorithm})], else: []
   end
@@ -606,11 +584,6 @@ defmodule Membrane.RTSP do
     end
   end
 
-  # Picks the authentication scheme from the `WWW-Authenticate` challenges of a response.
-  #
-  # A server may send several challenges, one per header (RFC 2617, section 1.2).
-  # Digest is preferred over Basic whatever their order. Scheme and parameter names are
-  # case-insensitive and values may be quoted strings or bare tokens.
   @spec detect_authentication_type(Response.t(), State.t()) :: {:ok, State.t()}
   defp detect_authentication_type(%Response{headers: headers}, state) do
     challenges =
@@ -648,7 +621,6 @@ defmodule Membrane.RTSP do
       end
     end)
     |> case do
-      # a scheme alone, without any parameter
       [] ->
         [{header |> String.trim() |> String.downcase(:ascii), %{}}]
 
@@ -704,8 +676,6 @@ defmodule Membrane.RTSP do
           nc: 1
         }
 
-        # The server expects `opaque` back unchanged (RFC 2617, section 3.2.1),
-        # and `algorithm` only when it named one.
         Enum.reduce([opaque: params["opaque"], algorithm: algorithm], options, fn
           {_key, nil}, options -> options
           {key, value}, options -> Map.put(options, key, value)
@@ -713,8 +683,6 @@ defmodule Membrane.RTSP do
     end
   end
 
-  # Only `auth` is implemented. When the server offers a list, `auth` is taken from it;
-  # when it offers none we can do, the RFC 2069 response without qop is used.
   @spec select_qop(binary() | nil) :: binary() | nil
   defp select_qop(nil), do: nil
 

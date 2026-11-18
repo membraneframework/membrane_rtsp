@@ -64,8 +64,6 @@ defmodule Membrane.RTSP.ResponseTest do
   end
 
   describe "Status line" do
-    # RFC 2326 section 7.1: Reason-Phrase = *<TEXT, excluding CR, LF>, so it may be
-    # empty and may hold any character.
     test "is parsed when the reason phrase is missing" do
       assert {:ok, %Response{status: 200, version: "1.0"}} =
                Response.parse("RTSP/1.0 200\r\nCSeq: 1\r\n\r\n")
@@ -94,8 +92,6 @@ defmodule Membrane.RTSP.ResponseTest do
   end
 
   describe "Header lines" do
-    # RFC 2326 takes its header syntax from RFC 2616 section 4.2: any amount of
-    # whitespace may follow the colon and a value may be empty.
     test "are parsed with no whitespace after the colon" do
       assert {:ok, %Response{headers: headers}} =
                Response.parse("RTSP/1.0 200 OK\r\nCSeq:1\r\nSession:abc;timeout=60\r\n\r\n")
@@ -209,8 +205,6 @@ defmodule Membrane.RTSP.ResponseTest do
   describe "Content-Type" do
     @sdp "v=0\r\no=- 0 1 IN IP4 10.0.0.1\r\ns=Cam\r\n"
 
-    # RFC 2616 section 3.7: the type and subtype are case-insensitive and may be
-    # followed by parameters.
     test "selects the SDP parser regardless of case" do
       for content_type <- ["Application/SDP", "APPLICATION/SDP", "application/Sdp"] do
         assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
@@ -233,8 +227,6 @@ defmodule Membrane.RTSP.ResponseTest do
       end
     end
 
-    # GStreamer assumes SDP when a DESCRIBE reply has no Content-Type, and
-    # libavformat never looks at the header at all.
     test "that is missing does not prevent an SDP body from being parsed" do
       log =
         ExUnit.CaptureLog.capture_log(fn ->
@@ -251,7 +243,6 @@ defmodule Membrane.RTSP.ResponseTest do
       assert {:ok, %Response{body: "packets_received: 10\r\n"}} =
                Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\npackets_received: 10\r\n")
 
-      # only the version line of a session description makes a body one
       assert {:ok, %Response{body: "v=notsdp\r\nfoo: bar\r\n"}} =
                Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\nv=notsdp\r\nfoo: bar\r\n")
     end
@@ -301,10 +292,6 @@ defmodule Membrane.RTSP.ResponseTest do
   end
 
   describe "Session description" do
-    # What a camera may answer to DESCRIBE: the user name of the origin contains a
-    # space, the timing is repeated inside the media section, the bandwidth type is
-    # experimental and the substream announces a format that is not a payload type.
-    # libavformat and GStreamer accept all of it.
     @camera_sdp """
     v=0
     o=RTSP Session 0 0 IN IP4 0.0.0.0
@@ -347,7 +334,6 @@ defmodule Membrane.RTSP.ResponseTest do
           assert %ExSDP.Media{type: :application, fmt: "smart/1/90000"} = metadata
         end)
 
-      # nothing is tolerated silently
       for line <- [
             "o=RTSP Session 0 0",
             "t=0 0",

@@ -30,7 +30,6 @@ defmodule Membrane.RTSP.ServerRequestTest do
     Task.async(fn -> RTSP.options(session) end)
   end
 
-  # the two replies may arrive in one read or in two
   defp receive_from_client(server, timeout \\ 1_000) do
     case :gen_tcp.recv(server, 0, timeout) do
       {:ok, data} -> data
@@ -169,7 +168,6 @@ defmodule Membrane.RTSP.ServerRequestTest do
       task = request(ctx.session)
       assert "OPTIONS " <> _rest = receive_from_client(ctx.server)
 
-      # interleaved packets and no response, for twice the response timeout of 1 s
       server = ctx.server
 
       sender =
@@ -235,7 +233,6 @@ defmodule Membrane.RTSP.ServerRequestTest do
         capture_log(fn ->
           :ok = RTSP.handle_response(ctx.session, "RTSP/1.0 200 OK\r\nCSeq: 41\r\n\r\n")
 
-          # the session is still there and still works
           task = request(ctx.session)
           assert "OPTIONS " <> _rest = receive_from_client(ctx.server)
           :ok = RTSP.handle_response(ctx.session, "RTSP/1.0 200 OK\r\nCSeq: 0\r\n\r\n")

@@ -86,7 +86,6 @@ defmodule Membrane.RTSP.Transport do
     end
   end
 
-  # Splits the first RTSP message off the data, if all of it is there.
   defp split_message(data) do
     case Response.verify_content_length(data) do
       {:ok, _expected, _received} ->
@@ -100,8 +99,6 @@ defmodule Membrane.RTSP.Transport do
     end
   end
 
-  # Waits for the response supplied by the process that reads the socket. Requests of
-  # the server that arrive in the meantime are answered and the wait goes on.
   defp await_response(socket, deadline) do
     receive do
       {:raw_response, message} ->
@@ -158,8 +155,6 @@ defmodule Membrane.RTSP.Transport do
     end
   end
 
-  # A request of the server is answered and reading goes on with what follows it,
-  # anything else is the awaited response.
   defp handle_message(message, rest, socket, deadline) do
     cond do
       ServerRequest.request?(message) ->
@@ -169,7 +164,6 @@ defmodule Membrane.RTSP.Transport do
       rest == <<>> ->
         {:ok, message}
 
-      # what follows the response may be requests of the server, which are answered
       true ->
         case reply_to_server_requests(socket, rest) do
           <<>> ->

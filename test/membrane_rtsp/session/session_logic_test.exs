@@ -184,8 +184,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       assert state.session_id == "12345678"
     end
 
-    # libavformat keeps the first session id it was given and GStreamer the last one;
-    # neither fails the request, which a strict comparison did.
     test "carrying another session id does not fail the request", %{
       state: state,
       request: request
@@ -207,8 +205,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
   describe "Content-Base" do
     @base "rtsp://localhost:5554/cam/realmonitor?channel=1&subtype=0"
 
-    # Answers DESCRIBE with the given headers and SETUP with a status chosen by the
-    # request URL; every request line is reported to the test process.
     defp mock_server(describe_headers, setup_status) do
       mock(:gen_tcp, [send: 2], fn _socket, request ->
         [request_line | _rest] = String.split(request, "\r\n")
@@ -244,8 +240,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       [state: %State{state | uri: URI.parse(@base), session_id: nil}]
     end
 
-    # RFC 2326, appendix C.1.1: a relative control URL is resolved against Content-Base.
-    # libavformat and live555 append it to that base verbatim.
     test "is used for a relative control path once the server rejects the request URL",
          %{state: state} do
       mock_server(["Content-Base: #{@base}/"], fn url ->
@@ -257,7 +251,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       log =
         ExUnit.CaptureLog.capture_log(fn ->
           assert {200, state} = execute(state, "SETUP", "trackID=0")
-          # the next track is set up through Content-Base straight away
           assert {200, _state} = execute(state, "SETUP", "trackID=1")
         end)
 
@@ -297,8 +290,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
              ]
     end
 
-    # gortsplib#705: most cameras that take a query in the stream URL expect the
-    # control path after it, which is what libavformat and live555 send as well.
     test "being absent, a rejected SETUP is retried with the path appended after the query",
          %{state: state} do
       mock_server([], fn url -> if url == "#{@base}/trackID=0", do: 200, else: 404 end)
@@ -316,8 +307,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
              ]
     end
 
-    # libavformat and gortsplib take a URL in the control attribute of the session for
-    # the base, before Content-Base (mediamtx#683: a Content-Base lacking the query)
     test "gives way to a URL in the control attribute of the session", %{state: %State{} = state} do
       sdp =
         "v=0\r\ns=x\r\na=control:rtsp://localhost:5554/media/video1/?orig=1\r\nm=video 0 RTP/AVP 96\r\n"
@@ -344,7 +333,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
                "SETUP rtsp://localhost:5554/media/video1/?orig=1/trackID=0 RTSP/1.0"
     end
 
-    # gortsplib puts a control that starts with "?" right behind the base (mediamtx#3517)
     test "takes a control path that is a query without a slash in between", %{
       state: %State{} = state
     } do
@@ -396,7 +384,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       state.auth
     end
 
-    # RFC 2617 section 1.2: parameter values are either tokens or quoted strings.
     test "with unquoted parameter values is understood", %{state: state, request: request} do
       assert authenticate(state, request, ["Digest realm=cam, nonce=abc123"]) ==
                {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
@@ -425,7 +412,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
              ]) == {:digest, %{nonce: "md5", realm: "cam", qop: nil, nc: 2, algorithm: "MD5"}}
     end
 
-    # gortsplib#1074: cameras with their SHA-256 option enabled offer nothing else.
     test "naming only SHA-256 is accepted", %{state: state, request: request} do
       assert authenticate(state, request, [
                ~s(Digest realm="cam", nonce="sha", algorithm="sha-256")
@@ -458,7 +444,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       end)
     end
 
-    # RFC 2617 section 1.2 allows several challenges in one header, comma-separated
     test "sharing a header with another one is told apart from it", %{
       state: state,
       request: request
@@ -530,7 +515,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       assert String.contains?(serialized_request, "username=\"login\"")
       assert String.contains?(serialized_request, "realm=\"realm\"")
       assert String.contains?(serialized_request, "nonce=\"nonce\"")
-      # the challenge named no algorithm, so none is sent back
       refute String.contains?(serialized_request, "algorithm=")
       assert String.contains?(serialized_request, "qop=auth")
       assert String.contains?(serialized_request, "nc=00000001")
@@ -552,7 +536,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
   end
 
   describe "Digest opaque" do
-    # RFC 2617 section 3.2.1: the opaque value should be returned by the client unchanged.
     test "is stored when the challenge carries it", %{state: state, request: request} do
       mock(:gen_tcp, [send: 2], fn _socket, _request ->
         {:ok,
@@ -602,8 +585,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
       authorization
     end
 
-    # mediamtx#3115: cameras that do not know the parameter answer 401 when it is sent
-    # unprompted, so it is only echoed.
     test "is sent back only when the challenge named one", %{
       state: %State{} = state,
       request: request
@@ -630,7 +611,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
   end
 
   describe "Credentials in the URL" do
-    # RFC 3986 section 3.2.1: reserved characters in the userinfo are percent-encoded.
     test "are percent-decoded before use", %{state: %State{} = state, request: request} do
       mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
         assert serialized_request =~

@@ -46,7 +46,6 @@ defmodule Membrane.RTSP.ServerRequest do
         501
       end
 
-    # The server matches the reply by CSeq and, if it sent one, by Session.
     echoed =
       for name <- ["CSeq", "Session"],
           value = header(headers, name),

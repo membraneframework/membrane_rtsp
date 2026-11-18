@@ -169,8 +169,6 @@ defmodule Membrane.RTSP.Request do
     apply_path(%URI{uri | userinfo: nil}, request)
   end
 
-  # A missing control attribute and "*" both stand for the presentation itself
-  # (RFC 2326, appendix C.1.1 and C.3).
   defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) when path in [nil, "", "*"],
     do: base_url
 
@@ -181,7 +179,6 @@ defmodule Membrane.RTSP.Request do
       parsed.host ->
         %URI{parsed | userinfo: nil} |> URI.to_string()
 
-      # the control path is a query alone, for example "?ctype=video"
       parsed.path == nil ->
         %URI{base_url | query: parsed.query} |> URI.to_string()
 
@@ -189,7 +186,6 @@ defmodule Membrane.RTSP.Request do
         parsed.path
         |> Path.relative_to(base_url.path)
         |> then(&Path.join(base_url.path, &1))
-        # the query of the session URL is not carried over, the one of the control path is
         |> then(&%URI{base_url | path: &1, query: parsed.query})
         |> URI.to_string()
     end

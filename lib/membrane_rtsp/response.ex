@@ -124,7 +124,6 @@ defmodule Membrane.RTSP.Response do
           {:ok | :error, expected_size :: non_neg_integer(), actual_size :: non_neg_integer()}
   def verify_content_length(response) do
     case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
-      # The headers have not arrived in full yet, so nothing can be said about them.
       [_incomplete_headers] ->
         {:error, 0, 0}
 
@@ -135,7 +134,6 @@ defmodule Membrane.RTSP.Response do
             [_start_line] -> ""
           end
 
-        # lines that are not headers are reported when the message is parsed, not here
         {headers, _malformed_lines} = parse_headers(headers)
 
         content_length =
@@ -209,8 +207,6 @@ defmodule Membrane.RTSP.Response do
     end
   end
 
-  # The parameter name is matched case-insensitively and whitespace around "=" is
-  # allowed, as libavformat and live555 do.
   defp parse_session_timeout(param) do
     with [name, value] <- String.split(param, "=", parts: 2),
          "timeout" <- name |> String.trim() |> String.downcase(:ascii),
@@ -246,8 +242,6 @@ defmodule Membrane.RTSP.Response do
         [line, rest] -> {line, rest}
       end
 
-    # The reason phrase is free text and may be empty (RFC 2326, section 7.1),
-    # so only the version and the status code are validated.
     case Regex.run(~r/^RTSP\/(\d\.\d) (\d\d\d)(?: .*)?$/, line) do
       [_match, version, code] ->
         case Integer.parse(code) do
@@ -264,12 +258,7 @@ defmodule Membrane.RTSP.Response do
     end
   end
 
-  # Header syntax follows RFC 2616, section 4.2 (referenced by RFC 2326): any amount
-  # of whitespace may surround the value, the value may be empty and it may continue
-  # on following lines that start with a space or a tab. Lines that are not headers
-  # at all are skipped, so that one of them does not cost the whole response.
-  #
-  # Returns the headers and the lines that were skipped, for the caller to report.
+  # RFC 2616, section 4.2: a value may continue on lines that start with a space or a tab.
   @spec parse_headers(binary()) ::
           {headers :: [{binary(), binary()}], malformed_lines :: [binary()]}
   defp parse_headers(headers) do
@@ -294,8 +283,6 @@ defmodule Membrane.RTSP.Response do
     {Enum.reverse(headers), Enum.reverse(malformed_lines)}
   end
 
-  # A value that is not a non-negative integer is treated as no body at all,
-  # which is what libavformat does, instead of raising on input from the network.
   defp parse_content_length(value) do
     case Integer.parse(value) do
       {content_length, _remainder} when content_length >= 0 ->
@@ -312,9 +299,6 @@ defmodule Membrane.RTSP.Response do
       {:ok, content_type} ->
         if sdp_content_type?(content_type), do: parse_sdp(data), else: {:ok, data}
 
-      # Some servers describe a stream without saying that the body is SDP. A body
-      # that starts with the version line of a session description is taken for one;
-      # anything else is returned as it came, as any other untyped body.
       {:error, :no_such_header} ->
         if sdp_version_line?(data) do
           Logger.warning("RTSP response has no Content-Type, taking its body for SDP")
@@ -330,13 +314,8 @@ defmodule Membrane.RTSP.Response do
     String.trim(first_line) == "v=0"
   end
 
-  # Descriptions sent by cameras break the SDP grammar in many small ways that do not
-  # stop other clients from using the stream, so lines that cannot be parsed are
-  # skipped (and logged by the parser) instead of failing the whole response.
   defp parse_sdp(data), do: ExSDP.parse(data, lenient: true)
 
-  # The media type is case-insensitive and may be followed by parameters
-  # (RFC 2616, section 3.7), e.g. "Application/SDP; charset=utf-8".
   defp sdp_content_type?(content_type) do
     [media_type | _parameters] = String.split(content_type, ";", parts: 2)
     media_type |> String.trim() |> String.downcase(:ascii) == "application/sdp"
