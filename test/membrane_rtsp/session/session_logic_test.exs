@@ -473,6 +473,21 @@ defmodule Membrane.RTSP.SessionLogicTest do
       assert authenticate(state, request, [~s(Basic realm="r", Negotiate)]) == :basic
     end
 
+    test "that is absurdly long is ignored instead of read", %{state: state, request: request} do
+      challenge = String.duplicate("a", 200_000) <> "!="
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {time, auth} = :timer.tc(fn -> authenticate(state, request, [challenge]) end)
+
+          assert auth == state.auth
+          assert time < 1_000_000
+        end)
+
+      assert log =~ "WWW-Authenticate header of 200002 bytes"
+      refute log =~ "aaaaaaaa"
+    end
+
     test "listing several qop values selects auth", %{state: state, request: request} do
       assert {:digest, %{qop: "auth"}} =
                authenticate(state, request, [

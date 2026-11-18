@@ -124,6 +124,60 @@ defmodule Membrane.RTSP.ServerRequestTest do
     end
   end
 
+  describe "a session that reads the socket itself" do
+    test "answers a request that arrives in two segments when no response is awaited", ctx do
+      {first, second} = String.split_at(@ping, 30)
+
+      :ok = :gen_tcp.send(ctx.server, first)
+      Process.sleep(50)
+      :ok = :gen_tcp.send(ctx.server, second)
+
+      assert receive_from_client(ctx.server) == @ping_reply
+    end
+
+    test "gives up on a response when the server keeps sending something else", ctx do
+      task = request(ctx.session)
+      assert "OPTIONS " <> _rest = receive_from_client(ctx.server)
+
+      # interleaved packets and no response, for twice the response timeout of 1 s
+      server = ctx.server
+
+      sender =
+        Task.async(fn ->
+          for _n <- 1..40 do
+            :gen_tcp.send(server, <<"$", 0, 4::16, 1, 2, 3, 4>>)
+            Process.sleep(50)
+          end
+        end)
+
+      started = System.monotonic_time(:millisecond)
+      assert {:error, :timeout} = Task.await(task, 3_000)
+      assert System.monotonic_time(:millisecond) - started < 1_800
+      Task.await(sender, 5_000)
+    end
+
+    test "stops when the socket reports an error", ctx do
+      Process.flag(:trap_exit, true)
+      session = ctx.session
+      socket = RTSP.get_socket(session)
+
+      capture_log(fn ->
+        send(session, {:tcp_error, socket, :etimedout})
+        assert_receive {:EXIT, ^session, {:socket_error, :etimedout}}, 1_000
+      end)
+    end
+
+    test "survives a message that it does not know", ctx do
+      log =
+        capture_log(fn ->
+          send(ctx.session, :something_else)
+          assert is_port(RTSP.get_socket(ctx.session))
+        end)
+
+      assert log =~ "something_else"
+    end
+  end
+
   describe "while another process reads the socket" do
     setup ctx do
       :ok = RTSP.transfer_socket_control(ctx.session, self())

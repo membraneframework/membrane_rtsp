@@ -27,7 +27,12 @@ defmodule Membrane.RTSP.Transport do
 
     result =
       with :ok <- mockable(:gen_tcp).send(socket, request) do
-        recv(socket, response_timeout)
+        # One deadline for the whole response: a server that keeps sending something
+        # else, such as interleaved packets, must not keep the caller waiting forever.
+        recv(
+          socket,
+          System.monotonic_time(:millisecond) + (response_timeout || @response_timeout)
+        )
       end
 
     :inet.setopts(socket, active: true)
@@ -105,50 +110,50 @@ defmodule Membrane.RTSP.Transport do
     :gen_tcp.close(socket)
   end
 
-  defp recv(socket, response_timeout, length \\ 0, acc \\ <<>>) do
-    with {:ok, data} <- do_recv(socket, response_timeout, length, acc) do
-      handle_received(data, socket, response_timeout)
+  defp recv(socket, deadline, length \\ 0, acc \\ <<>>) do
+    with {:ok, data} <- do_recv(socket, deadline, length, acc) do
+      handle_received(data, socket, deadline)
     end
   end
 
-  defp handle_received(<<>>, socket, response_timeout) do
-    recv(socket, response_timeout)
+  defp handle_received(<<>>, socket, deadline) do
+    recv(socket, deadline)
   end
 
   # skip rtp/rtcp packets
   defp handle_received(
          <<"$", _channel::8, size::16, _rtp::binary-size(size), rest::binary>>,
          socket,
-         response_timeout
+         deadline
        ) do
-    handle_received(rest, socket, response_timeout)
+    handle_received(rest, socket, deadline)
   end
 
-  defp handle_received(<<"$", _rest::binary>> = data, socket, response_timeout) do
-    recv(socket, response_timeout, 0, data)
+  defp handle_received(<<"$", _rest::binary>> = data, socket, deadline) do
+    recv(socket, deadline, 0, data)
   end
 
-  defp handle_received(data, socket, response_timeout) do
+  defp handle_received(data, socket, deadline) do
     case Response.verify_content_length(data) do
       {:ok, _expected, _received} ->
-        handle_message(data, <<>>, socket, response_timeout)
+        handle_message(data, <<>>, socket, deadline)
 
       {:error, expected, received} when received > expected ->
         {message, rest} = :erlang.split_binary(data, byte_size(data) - (received - expected))
-        handle_message(message, rest, socket, response_timeout)
+        handle_message(message, rest, socket, deadline)
 
       {:error, expected, received} ->
-        recv(socket, response_timeout, expected - received, data)
+        recv(socket, deadline, expected - received, data)
     end
   end
 
   # A request of the server is answered and reading goes on with what follows it,
   # anything else is the awaited response.
-  defp handle_message(message, rest, socket, response_timeout) do
+  defp handle_message(message, rest, socket, deadline) do
     cond do
       ServerRequest.request?(message) ->
         reply_to_server_request(socket, message)
-        handle_received(rest, socket, response_timeout)
+        handle_received(rest, socket, deadline)
 
       rest == <<>> ->
         {:ok, message}
@@ -169,14 +174,16 @@ defmodule Membrane.RTSP.Transport do
     end
   end
 
-  defp do_recv(socket, response_timeout, length, acc) do
-    case mockable(:gen_tcp).recv(
-           socket,
-           length,
-           response_timeout || @response_timeout
-         ) do
-      {:ok, data} -> {:ok, acc <> data}
-      {:error, reason} -> {:error, reason}
+  defp do_recv(socket, deadline, length, acc) do
+    case deadline - System.monotonic_time(:millisecond) do
+      remaining when remaining > 0 ->
+        case mockable(:gen_tcp).recv(socket, length, remaining) do
+          {:ok, data} -> {:ok, acc <> data}
+          {:error, reason} -> {:error, reason}
+        end
+
+      _deadline_passed ->
+        {:error, :timeout}
     end
   end
 end

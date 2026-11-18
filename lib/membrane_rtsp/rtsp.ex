@@ -6,7 +6,7 @@ defmodule Membrane.RTSP do
 
   require Logger
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP.{Request, Response, ServerRequest, Transport}
 
   @type t() :: pid()
 
@@ -24,6 +24,10 @@ defmodule Membrane.RTSP do
           | {:user_agent, binary()}
 
   @default_rtsp_port 554
+  # the most that is kept of a request of the server while its end is awaited
+  @max_unsolicited_data_size 4096
+  # a longer challenge is not worth the time that reading it could take
+  @max_challenge_size 4096
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
@@ -49,6 +53,7 @@ defmodule Membrane.RTSP do
             receive_from: :socket | :external_process,
             retries: non_neg_integer(),
             user_agent: binary() | nil,
+            unsolicited_data: binary(),
             content_base: binary() | nil,
             append_control_to_base?: boolean()
           }
@@ -62,6 +67,7 @@ defmodule Membrane.RTSP do
                   receive_from: :socket,
                   retries: 0,
                   user_agent: nil,
+                  unsolicited_data: <<>>,
                   content_base: nil,
                   append_control_to_base?: false
                 ]
@@ -186,14 +192,14 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_call({:execute, %Request{method: "SETUP"} = request}, _from, state) do
-    execute_setup(request, state)
+  def handle_call({:execute, %Request{method: "SETUP"} = request}, _from, %State{} = state) do
+    execute_setup(request, %State{state | unsolicited_data: <<>>})
   end
 
   @impl true
-  def handle_call({:execute, request}, _from, state) do
+  def handle_call({:execute, request}, _from, %State{} = state) do
     with {:reply, {:ok, %Response{} = response}, state} <-
-           handle_execute_call(request, true, state) do
+           handle_execute_call(request, true, %State{state | unsolicited_data: <<>>}) do
       {:reply, {:ok, response}, store_content_base(request, response, state)}
     end
   end
@@ -218,21 +224,48 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_info({:tcp, _socket, data}, state) do
-    handle_unsolicited_message(data, state)
-    {:noreply, state}
+  def handle_info({:tcp, _socket, data}, %State{} = state) do
+    # A request of the server may come in more than one segment, so its beginning
+    # is kept until the rest arrives.
+    case handle_unsolicited_message(state.unsolicited_data <> data, state) do
+      <<>> ->
+        {:noreply, %State{state | unsolicited_data: <<>>}}
+
+      rest ->
+        if ServerRequest.request?(rest) and byte_size(rest) <= @max_unsolicited_data_size do
+          {:noreply, %State{state | unsolicited_data: rest}}
+        else
+          Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
+          {:noreply, %State{state | unsolicited_data: <<>>}}
+        end
+    end
   end
 
   # A message handed over with `handle_response/2` while no request is in progress.
   @impl true
   def handle_info({:raw_response, message}, state) do
-    handle_unsolicited_message(message, state)
+    case handle_unsolicited_message(message, state) do
+      <<>> -> :ok
+      rest -> Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
+    end
+
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:tcp_error, _socket, reason}, state) do
+    {:stop, {:socket_error, reason}, state}
   end
 
   @impl true
   def handle_info({:tcp_closed, _socket}, state) do
     {:stop, :socket_closed, state}
+  end
+
+  @impl true
+  def handle_info(message, state) do
+    Logger.warning("Ignoring an unexpected message: #{inspect(message)}")
+    {:noreply, state}
   end
 
   @impl true
@@ -243,12 +276,9 @@ defmodule Membrane.RTSP do
   # Servers may send requests of their own, typically to check that the client is still
   # there, and those are answered. Anything else that arrives while no request is in
   # progress, such as a response that came after its request had timed out, is dropped.
-  @spec handle_unsolicited_message(binary(), State.t()) :: :ok
+  @spec handle_unsolicited_message(binary(), State.t()) :: binary()
   defp handle_unsolicited_message(message, %State{socket: socket}) do
-    case Transport.reply_to_server_requests(socket, message) do
-      <<>> -> :ok
-      rest -> Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
-    end
+    Transport.reply_to_server_requests(socket, message)
   end
 
   @spec do_start(binary() | URI.t(), options(), (module(), any() -> GenServer.on_start())) ::
@@ -596,6 +626,11 @@ defmodule Membrane.RTSP do
   # scheme name stands in front of a parameter. Within a challenge the first
   # occurrence of a parameter counts.
   @spec parse_challenges(binary()) :: [{scheme :: binary(), params :: %{binary() => binary()}}]
+  defp parse_challenges(header) when byte_size(header) > @max_challenge_size do
+    Logger.warning("Ignoring a WWW-Authenticate header of #{byte_size(header)} bytes")
+    []
+  end
+
   defp parse_challenges(header) do
     ~r/(?:([A-Za-z][A-Za-z0-9_-]*)[ \t]+)?([A-Za-z0-9_-]+)[ \t]*=[ \t]*(?:"([^"]*)"|([^\s,]*))/
     |> Regex.scan(header)
