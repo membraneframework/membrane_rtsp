@@ -70,8 +70,12 @@ defmodule Membrane.RTSP.Response do
       end
 
     with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
-         {:ok, headers} <- parse_headers(headers),
+         {headers, malformed_lines} = parse_headers(headers),
          {:ok, body} <- parse_body(body, headers) do
+      Enum.each(malformed_lines, fn line ->
+        Logger.warning("Ignoring a malformed RTSP header line: #{inspect(line)}")
+      end)
+
       {:ok, %__MODULE__{response | headers: headers, body: body}}
     end
   end
@@ -132,7 +136,7 @@ defmodule Membrane.RTSP.Response do
           end
 
         # lines that are not headers are reported when the message is parsed, not here
-        {:ok, headers} = parse_headers(headers, false)
+        {headers, _malformed_lines} = parse_headers(headers)
 
         content_length =
           case find_header(headers, "Content-Length") do
@@ -264,34 +268,31 @@ defmodule Membrane.RTSP.Response do
   # of whitespace may surround the value, the value may be empty and it may continue
   # on following lines that start with a space or a tab. Lines that are not headers
   # at all are skipped, so that one of them does not cost the whole response.
-  defp parse_headers(headers, log_malformed? \\ true) do
-    headers
-    |> String.split(@line_ending)
-    |> Enum.reduce([], fn
-      "", acc ->
-        acc
+  #
+  # Returns the headers and the lines that were skipped, for the caller to report.
+  @spec parse_headers(binary()) ::
+          {headers :: [{binary(), binary()}], malformed_lines :: [binary()]}
+  defp parse_headers(headers) do
+    {headers, malformed_lines} =
+      headers
+      |> String.split(@line_ending)
+      |> Enum.reduce({[], []}, fn
+        "", acc ->
+          acc
 
-      <<char, _rest::binary>> = line, [{name, value} | acc] when char in [?\s, ?\t] ->
-        [{name, String.trim(value <> " " <> String.trim(line))} | acc]
+        <<char, _rest::binary>> = line, {[{name, value} | headers], malformed}
+        when char in [?\s, ?\t] ->
+          {[{name, String.trim(value <> " " <> String.trim(line))} | headers], malformed}
 
-      line, acc ->
-        case String.split(line, ":", parts: 2) do
-          [name, value] when name != "" ->
-            [{name, String.trim(value)} | acc]
+        line, {headers, malformed} ->
+          case String.split(line, ":", parts: 2) do
+            [name, value] when name != "" -> {[{name, String.trim(value)} | headers], malformed}
+            _other -> {headers, [line | malformed]}
+          end
+      end)
 
-          _other ->
-            log_malformed_header(line, log_malformed?)
-            acc
-        end
-    end)
-    |> Enum.reverse()
-    |> then(&{:ok, &1})
+    {Enum.reverse(headers), Enum.reverse(malformed_lines)}
   end
-
-  defp log_malformed_header(line, true),
-    do: Logger.warning("Ignoring a malformed RTSP header line: #{inspect(line)}")
-
-  defp log_malformed_header(_line, false), do: :ok
 
   # A value that is not a non-negative integer is treated as no body at all,
   # which is what libavformat does, instead of raising on input from the network.
