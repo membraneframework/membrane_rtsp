@@ -184,8 +184,13 @@ defmodule Membrane.RTSP.ResponseTest do
 
   describe "Truncated or garbled input" do
     test "parse/1 does not raise when the blank line after the headers is missing" do
-      assert {:ok, %Response{status: 200, headers: [{"CSeq", "1"}], body: ""}} =
-               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 1\r\n")
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{status: 200, headers: [{"CSeq", "1"}], body: ""}} =
+                   Response.parse("RTSP/1.0 200 OK\r\nCSeq: 1\r\n")
+        end)
+
+      assert log =~ "does not end its headers with an empty line"
     end
 
     test "verify_content_length/1 treats an unparsable Content-Length as absent" do
@@ -231,8 +236,15 @@ defmodule Membrane.RTSP.ResponseTest do
     # GStreamer assumes SDP when a DESCRIBE reply has no Content-Type, and
     # libavformat never looks at the header at all.
     test "that is missing does not prevent an SDP body from being parsed" do
-      assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
-               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Length: 37\r\n\r\n" <> @sdp)
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
+                   Response.parse(
+                     "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Length: 37\r\n\r\n" <> @sdp
+                   )
+        end)
+
+      assert log =~ "has no Content-Type"
     end
 
     test "that is missing leaves a body that is not SDP unparsed" do

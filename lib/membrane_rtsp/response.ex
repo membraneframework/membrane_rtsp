@@ -61,8 +61,12 @@ defmodule Membrane.RTSP.Response do
   def parse(response) do
     {headers, body} =
       case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
-        [headers, body] -> {headers, body}
-        [headers] -> {headers, ""}
+        [headers, body] ->
+          {headers, body}
+
+        [headers] ->
+          Logger.warning("RTSP message does not end its headers with an empty line")
+          {headers, ""}
       end
 
     with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
@@ -313,6 +317,7 @@ defmodule Membrane.RTSP.Response do
       {:error, :no_such_header} ->
         with "v=" <> _rest <- data,
              {:ok, sdp} <- parse_sdp(data) do
+          Logger.warning("RTSP response has no Content-Type, taking its body for SDP")
           {:ok, sdp}
         else
           _other -> {:ok, data}
