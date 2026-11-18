@@ -20,18 +20,29 @@ defmodule Membrane.RTSP.Transport do
     )
   end
 
-  @spec execute(binary(), :gen_tcp.socket(), non_neg_integer() | nil, :socket | :external_process) ::
-          {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
-  def execute(request, socket, response_timeout, :socket) do
+  @spec execute(
+          binary(),
+          :gen_tcp.socket(),
+          non_neg_integer() | nil,
+          :socket | :external_process,
+          binary()
+        ) :: {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
+  def execute(request, socket, response_timeout, receive_from, pending_data \\ <<>>)
+
+  def execute(request, socket, response_timeout, :socket, pending_data) do
     :inet.setopts(socket, active: false)
 
     result =
       with :ok <- mockable(:gen_tcp).send(socket, request) do
         # One deadline for the whole response: a server that keeps sending something
         # else, such as interleaved packets, must not keep the caller waiting forever.
+        # `pending_data` is what arrived before the request and is not a whole message
+        # yet, such as the beginning of a request of the server; the response follows it.
         recv(
           socket,
-          System.monotonic_time(:millisecond) + (response_timeout || @response_timeout)
+          System.monotonic_time(:millisecond) + (response_timeout || @response_timeout),
+          0,
+          pending_data
         )
       end
 
@@ -39,7 +50,7 @@ defmodule Membrane.RTSP.Transport do
     result
   end
 
-  def execute(request, socket, response_timeout, :external_process) do
+  def execute(request, socket, response_timeout, :external_process, _pending_data) do
     with :ok <- mockable(:gen_tcp).send(socket, request) do
       timeout = response_timeout || @response_timeout
       await_response(socket, System.monotonic_time(:millisecond) + timeout)

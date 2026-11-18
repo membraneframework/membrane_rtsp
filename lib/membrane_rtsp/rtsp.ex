@@ -193,13 +193,13 @@ defmodule Membrane.RTSP do
 
   @impl true
   def handle_call({:execute, %Request{method: "SETUP"} = request}, _from, %State{} = state) do
-    execute_setup(request, %State{state | unsolicited_data: <<>>})
+    execute_setup(request, state)
   end
 
   @impl true
   def handle_call({:execute, request}, _from, %State{} = state) do
     with {:reply, {:ok, %Response{} = response}, state} <-
-           handle_execute_call(request, true, %State{state | unsolicited_data: <<>>}) do
+           handle_execute_call(request, true, state) do
       {:reply, {:ok, response}, store_content_base(request, response, state)}
     end
   end
@@ -313,7 +313,7 @@ defmodule Membrane.RTSP do
     |> Request.with_header("User-Agent", state.user_agent || @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> Transport.execute(socket, response_timeout, state.receive_from)
+    |> Transport.execute(socket, response_timeout, state.receive_from, state.unsolicited_data)
   end
 
   @spec inject_session_header(Request.t(), binary() | nil) :: Request.t()
@@ -365,8 +365,12 @@ defmodule Membrane.RTSP do
 
   @spec handle_execute_call(Request.t(), boolean(), State.t()) ::
           {:reply, Response.result(), State.t()}
-  defp handle_execute_call(request, retry, state) do
-    with {:ok, raw_response} <- execute(request, state),
+  defp handle_execute_call(request, retry, %State{} = state) do
+    result = execute(request, state)
+    # what had arrived before the request went into the reading of its response
+    state = %State{state | unsolicited_data: <<>>}
+
+    with {:ok, raw_response} <- result,
          {:ok, response, state} <- parse_response(raw_response, state) do
       case response do
         %Response{status: 401} when retry ->

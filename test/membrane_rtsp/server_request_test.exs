@@ -135,6 +135,36 @@ defmodule Membrane.RTSP.ServerRequestTest do
       assert receive_from_client(ctx.server) == @ping_reply
     end
 
+    test "answers a request whose end arrives only after the session has sent a request", ctx do
+      {first, second} = String.split_at(@ping, 30)
+
+      :ok = :gen_tcp.send(ctx.server, first)
+      Process.sleep(50)
+
+      task = request(ctx.session)
+      assert "OPTIONS " <> _rest = receive_from_client(ctx.server)
+
+      :ok = :gen_tcp.send(ctx.server, second <> "RTSP/1.0 200 OK\r\nCSeq: 0\r\n\r\n")
+      assert receive_from_client(ctx.server) == @ping_reply
+      assert {:ok, %RTSP.Response{status: 200}} = Task.await(task)
+    end
+
+    test "does not keep the beginning of a request for ever", ctx do
+      log =
+        capture_log(fn ->
+          :ok =
+            :gen_tcp.send(
+              ctx.server,
+              "OPTIONS * RTSP/1.0\r\nX-Padding: " <> String.duplicate("a", 5_000)
+            )
+
+          Process.sleep(100)
+          assert :sys.get_state(ctx.session).unsolicited_data == <<>>
+        end)
+
+      assert log =~ "unexpected packet"
+    end
+
     test "gives up on a response when the server keeps sending something else", ctx do
       task = request(ctx.session)
       assert "OPTIONS " <> _rest = receive_from_client(ctx.server)
