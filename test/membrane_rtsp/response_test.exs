@@ -250,6 +250,10 @@ defmodule Membrane.RTSP.ResponseTest do
     test "that is missing leaves a body that is not SDP unparsed" do
       assert {:ok, %Response{body: "packets_received: 10\r\n"}} =
                Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\npackets_received: 10\r\n")
+
+      # only the version line of a session description makes a body one
+      assert {:ok, %Response{body: "v=notsdp\r\nfoo: bar\r\n"}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\nv=notsdp\r\nfoo: bar\r\n")
     end
 
     test "leaves a body of another type unparsed" do

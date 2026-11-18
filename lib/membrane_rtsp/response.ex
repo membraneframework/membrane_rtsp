@@ -311,18 +311,22 @@ defmodule Membrane.RTSP.Response do
       {:ok, content_type} ->
         if sdp_content_type?(content_type), do: parse_sdp(data), else: {:ok, data}
 
-      # Some servers describe a stream without saying that the body is SDP.
-      # A body that starts like a session description is given to the SDP parser;
-      # if that fails, it is returned as it came, as any other untyped body.
+      # Some servers describe a stream without saying that the body is SDP. A body
+      # that starts with the version line of a session description is taken for one;
+      # anything else is returned as it came, as any other untyped body.
       {:error, :no_such_header} ->
-        with "v=" <> _rest <- data,
-             {:ok, sdp} <- parse_sdp(data) do
+        if sdp_version_line?(data) do
           Logger.warning("RTSP response has no Content-Type, taking its body for SDP")
-          {:ok, sdp}
+          parse_sdp(data)
         else
-          _other -> {:ok, data}
+          {:ok, data}
         end
     end
+  end
+
+  defp sdp_version_line?(data) do
+    [first_line | _rest] = String.split(data, @line_ending, parts: 2)
+    String.trim(first_line) == "v=0"
   end
 
   # Descriptions sent by cameras break the SDP grammar in many small ways that do not
