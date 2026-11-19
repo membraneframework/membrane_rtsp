@@ -128,13 +128,7 @@ defmodule Membrane.RTSP.Response do
         {:error, 0, 0}
 
       [headers, body] ->
-        headers =
-          case String.split(headers, @line_ending, parts: 2) do
-            [_start_line, headers] -> headers
-            [_start_line] -> ""
-          end
-
-        {headers, _malformed_lines} = parse_headers(headers)
+        {headers, _malformed_lines} = headers |> drop_start_line() |> parse_headers()
 
         content_length =
           case find_header(headers, "Content-Length") do
@@ -145,6 +139,13 @@ defmodule Membrane.RTSP.Response do
         if byte_size(body) == content_length,
           do: {:ok, content_length, byte_size(body)},
           else: {:error, content_length, byte_size(body)}
+    end
+  end
+
+  defp drop_start_line(message) do
+    case String.split(message, @line_ending, parts: 2) do
+      [_start_line, headers] -> headers
+      [_start_line] -> ""
     end
   end
 
