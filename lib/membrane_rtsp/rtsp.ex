@@ -6,24 +6,37 @@ defmodule Membrane.RTSP do
 
   require Logger
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP.{Request, Response, ServerRequest, Transport}
 
   @type t() :: pid()
 
+  @typedoc """
+  Options of a session:
+  * `:connection_timeout` - time in milliseconds to wait for the TCP connection.
+  * `:response_timeout` - time in milliseconds to wait for a response to a request.
+  * `:user_agent` - value of the `User-Agent` header sent with every request, for
+    servers that treat clients differently by name. Defaults to `user_agent/0`.
+  """
   @type options() :: [option()]
   @type option() ::
-          {:connection_timeout, non_neg_integer()} | {:response_timeout, non_neg_integer()}
+          {:connection_timeout, non_neg_integer()}
+          | {:response_timeout, non_neg_integer()}
+          | {:user_agent, binary()}
 
   @default_rtsp_port 554
+  @max_unsolicited_data_size 4096
+  @max_challenge_size 4096
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
     @moduledoc false
     @type digest_opts() :: %{
-            realm: String.t() | nil,
-            nonce: String.t() | nil,
-            qop: String.t() | nil,
-            nc: non_neg_integer()
+            required(:realm) => String.t() | nil,
+            required(:nonce) => String.t() | nil,
+            required(:qop) => String.t() | nil,
+            required(:nc) => non_neg_integer(),
+            optional(:opaque) => String.t(),
+            optional(:algorithm) => String.t()
           }
 
     @type auth() :: nil | :basic | {:digest, digest_opts()}
@@ -36,7 +49,11 @@ defmodule Membrane.RTSP do
             auth: auth(),
             response_timeout: non_neg_integer() | nil,
             receive_from: :socket | :external_process,
-            retries: non_neg_integer()
+            retries: non_neg_integer(),
+            user_agent: binary() | nil,
+            unsolicited_data: binary(),
+            content_base: binary() | nil,
+            append_control_to_base?: boolean()
           }
 
     @enforce_keys [:socket, :uri, :response_timeout]
@@ -46,7 +63,11 @@ defmodule Membrane.RTSP do
                   cseq: 0,
                   auth: nil,
                   receive_from: :socket,
-                  retries: 0
+                  retries: 0,
+                  user_agent: nil,
+                  unsolicited_data: <<>>,
+                  content_base: nil,
+                  append_control_to_base?: false
                 ]
   end
 
@@ -91,6 +112,13 @@ defmodule Membrane.RTSP do
     GenServer.call(session, :get_socket)
   end
 
+  @doc """
+  Supplies the session with an RTSP message read from the socket by the process that
+  controls it (see `transfer_socket_control/2`).
+
+  The message is either the response to the request the session is waiting on, or a
+  request sent by the server, which the session answers on its own.
+  """
   @spec handle_response(t(), binary()) :: :ok
   def handle_response(session, raw_response) do
     send(session, {:raw_response, raw_response})
@@ -151,7 +179,8 @@ defmodule Membrane.RTSP do
         socket: socket,
         uri: url,
         response_timeout: options[:response_timeout],
-        auth: auth_type
+        auth: auth_type,
+        user_agent: options[:user_agent]
       }
 
       {:ok, state}
@@ -161,8 +190,16 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_call({:execute, request}, _from, state) do
-    handle_execute_call(request, true, state)
+  def handle_call({:execute, %Request{method: "SETUP"} = request}, _from, %State{} = state) do
+    execute_setup(request, state)
+  end
+
+  @impl true
+  def handle_call({:execute, request}, _from, %State{} = state) do
+    with {:reply, {:ok, %Response{} = response}, state} <-
+           handle_execute_call(request, true, state) do
+      {:reply, {:ok, response}, store_content_base(request, response, state)}
+    end
   end
 
   @impl true
@@ -185,9 +222,34 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_info({:tcp, _socket, data}, state) do
-    Logger.warning("Received an unexpected packet, ignoring: #{inspect(data)}")
+  def handle_info({:tcp, _socket, data}, %State{} = state) do
+    case handle_unsolicited_message(state.unsolicited_data <> data, state) do
+      <<>> ->
+        {:noreply, %State{state | unsolicited_data: <<>>}}
+
+      rest ->
+        if ServerRequest.request?(rest) and byte_size(rest) <= @max_unsolicited_data_size do
+          {:noreply, %State{state | unsolicited_data: rest}}
+        else
+          Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
+          {:noreply, %State{state | unsolicited_data: <<>>}}
+        end
+    end
+  end
+
+  @impl true
+  def handle_info({:raw_response, message}, state) do
+    case handle_unsolicited_message(message, state) do
+      <<>> -> :ok
+      rest -> Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
+    end
+
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:tcp_error, _socket, reason}, state) do
+    {:stop, {:socket_error, reason}, state}
   end
 
   @impl true
@@ -196,8 +258,19 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
+  def handle_info(message, state) do
+    Logger.warning("Ignoring an unexpected message: #{inspect(message)}")
+    {:noreply, state}
+  end
+
+  @impl true
   def terminate(_reason, state) do
     Transport.close(state.socket)
+  end
+
+  @spec handle_unsolicited_message(binary(), State.t()) :: binary()
+  defp handle_unsolicited_message(message, %State{socket: socket}) do
+    Transport.reply_to_server_requests(socket, message)
   end
 
   @spec do_start(binary() | URI.t(), options(), (module(), any() -> GenServer.on_start())) ::
@@ -229,10 +302,10 @@ defmodule Membrane.RTSP do
     |> inject_session_header(session_id)
     |> inject_content_length()
     |> Request.with_header("CSeq", cseq |> to_string())
-    |> Request.with_header("User-Agent", @user_agent)
+    |> Request.with_header("User-Agent", state.user_agent || @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> Transport.execute(socket, response_timeout, state.receive_from)
+    |> Transport.execute(socket, response_timeout, state.receive_from, state.unsolicited_data)
   end
 
   @spec inject_session_header(Request.t(), binary() | nil) :: Request.t()
@@ -284,8 +357,11 @@ defmodule Membrane.RTSP do
 
   @spec handle_execute_call(Request.t(), boolean(), State.t()) ::
           {:reply, Response.result(), State.t()}
-  defp handle_execute_call(request, retry, state) do
-    with {:ok, raw_response} <- execute(request, state),
+  defp handle_execute_call(request, retry, %State{} = state) do
+    result = execute(request, state)
+    state = %State{state | unsolicited_data: <<>>}
+
+    with {:ok, raw_response} <- result,
          {:ok, response, state} <- parse_response(raw_response, state) do
       case response do
         %Response{status: 401} when retry ->
@@ -299,9 +375,95 @@ defmodule Membrane.RTSP do
     end
   end
 
+  @spec store_content_base(Request.t(), Response.t(), State.t()) :: State.t()
+  defp store_content_base(%Request{method: "DESCRIBE"}, %Response{} = response, %State{} = state) do
+    with true <- Response.ok?(response),
+         {:ok, value} <- base_url_of_description(response),
+         %URI{scheme: scheme, host: host} = content_base
+         when scheme in ["rtsp", "rtsps"] and is_binary(host) and host != "" <-
+           URI.parse(String.trim(value)) do
+      %State{state | content_base: URI.to_string(%URI{content_base | userinfo: nil})}
+    else
+      _other -> %State{state | content_base: nil}
+    end
+  end
+
+  defp store_content_base(_request, _response, state), do: state
+
+  # A control attribute of the session that holds a URL names the base itself and
+  # goes before the Content-Base header, as in libavformat and gortsplib, which found
+  # servers whose Content-Base lacks a part of the URL that this attribute has.
+  @spec base_url_of_description(Response.t()) :: {:ok, binary()} | {:error, :no_such_header}
+  defp base_url_of_description(%Response{body: %ExSDP{} = sdp} = response) do
+    case ExSDP.get_attribute(sdp, "control") do
+      {"control", "rtsp" <> _rest = url} -> {:ok, url}
+      _other -> Response.get_header(response, "Content-Base")
+    end
+  end
+
+  defp base_url_of_description(response), do: Response.get_header(response, "Content-Base")
+
+  # The URL that this client has always built is tried first. If the server rejects it,
+  # the control path is appended to the base URL instead, and that form is kept once it works.
+  @spec execute_setup(Request.t(), State.t()) :: {:reply, Response.result(), State.t()}
+  defp execute_setup(%Request{} = request, %State{} = state) do
+    request_url = Request.process_uri(request, state.uri)
+
+    case appended_control_url(request, state) do
+      url when url in [nil, request_url] ->
+        handle_execute_call(request, true, state)
+
+      url when state.append_control_to_base? ->
+        handle_execute_call(%Request{request | path: url}, true, state)
+
+      url ->
+        with {:reply, {:ok, %Response{status: status}}, %State{} = state}
+             when status not in 200..299 and status not in [401, 461] <-
+               handle_execute_call(request, true, state) do
+          Logger.warning(
+            "SETUP of #{request_url} was rejected with status #{status}, " <>
+              "retrying with the control path appended to the base URL: #{url}"
+          )
+
+          retry_setup(%Request{request | path: url}, state)
+        end
+    end
+  end
+
+  @spec retry_setup(Request.t(), State.t()) :: {:reply, Response.result(), State.t()}
+  defp retry_setup(request, state) do
+    case handle_execute_call(request, true, state) do
+      {:reply, {:ok, %Response{status: status}} = result, %State{} = state}
+      when status in 200..299 ->
+        {:reply, result, %State{state | append_control_to_base?: true}}
+
+      other ->
+        other
+    end
+  end
+
+  @spec appended_control_url(Request.t(), State.t()) :: binary() | nil
+  defp appended_control_url(%Request{path: path}, _state) when path in [nil, "", "*"], do: nil
+
+  defp appended_control_url(%Request{path: path}, %State{uri: %URI{} = uri} = state) do
+    base = state.content_base || URI.to_string(%URI{uri | userinfo: nil})
+
+    case {URI.parse(path), path} do
+      {%URI{host: nil}, "?" <> _query} ->
+        base <> path
+
+      {%URI{host: nil}, _path} ->
+        String.trim_trailing(base, "/") <> "/" <> String.trim_leading(path, "/")
+
+      _absolute ->
+        nil
+    end
+  end
+
   @spec do_apply_credentials(Request.t(), URI.t(), State.auth()) :: Request.t()
-  defp do_apply_credentials(request, %URI{userinfo: info}, :basic) do
-    encoded = Base.encode64(info)
+  defp do_apply_credentials(request, %URI{} = uri, :basic) do
+    {username, password} = credentials(uri)
+    encoded = Base.encode64(username <> ":" <> password)
     Request.with_header(request, "Authorization", "Basic " <> encoded)
   end
 
@@ -314,37 +476,26 @@ defmodule Membrane.RTSP do
     request
   end
 
+  @spec credentials(URI.t()) :: {username :: String.t(), password :: String.t()}
+  defp credentials(%URI{userinfo: userinfo}) do
+    case String.split(userinfo, ":", parts: 2) do
+      [username, password] -> {URI.decode(username), URI.decode(password)}
+      [username] -> {URI.decode(username), ""}
+    end
+  end
+
   @spec encode_digest(Request.t(), URI.t(), State.digest_opts()) :: String.t()
-  defp encode_digest(request, %URI{userinfo: userinfo} = uri, options) do
-    [username, password] = String.split(userinfo, ":", parts: 2)
+  defp encode_digest(request, %URI{} = uri, options) do
+    {username, password} = credentials(uri)
     encoded_uri = Request.process_uri(request, uri)
-    ha1 = md5([username, options.realm, password])
-    ha2 = md5([request.method, encoded_uri])
+    ha1 = digest_hash([username, options.realm, password], options)
+    ha2 = digest_hash([request.method, encoded_uri], options)
 
     encode_digest_auth(username, encoded_uri, ha1, ha2, options)
   end
 
   defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: nil} = options) do
-    response = md5([ha1, options.nonce, ha2])
-
-    Enum.join(
-      [
-        "Digest",
-        ~s(username="#{username}",),
-        ~s(realm="#{options.realm}",),
-        ~s(nonce="#{options.nonce}",),
-        ~s(uri="#{encoded_uri}",),
-        ~s(response="#{response}")
-      ],
-      " "
-    )
-  end
-
-  defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: qop} = options) do
-    nc = options[:nc] || 1
-    nc_hex = :io_lib.format("~8.16.0b", [nc]) |> IO.iodata_to_binary()
-    cnonce = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
-    response = md5([ha1, options.nonce, nc_hex, cnonce, qop, ha2])
+    response = digest_hash([ha1, options.nonce, ha2], options)
 
     "Digest " <>
       Enum.join(
@@ -353,65 +504,196 @@ defmodule Membrane.RTSP do
           ~s(realm="#{options.realm}"),
           ~s(nonce="#{options.nonce}"),
           ~s(uri="#{encoded_uri}"),
-          ~s(response="#{response}"),
-          ~s(algorithm=MD5),
-          ~s(qop=#{qop}),
-          ~s(nc=#{nc_hex}),
-          ~s(cnonce="#{cnonce}")
-        ],
+          ~s(response="#{response}")
+        ] ++ algorithm_param(options, nil) ++ opaque_param(options),
+        ", "
+      )
+  end
+
+  defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: qop} = options) do
+    nc = options[:nc] || 1
+    nc_hex = :io_lib.format("~8.16.0b", [nc]) |> IO.iodata_to_binary()
+    cnonce = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
+    response = digest_hash([ha1, options.nonce, nc_hex, cnonce, qop, ha2], options)
+
+    "Digest " <>
+      Enum.join(
+        [
+          ~s(username="#{username}"),
+          ~s(realm="#{options.realm}"),
+          ~s(nonce="#{options.nonce}"),
+          ~s(uri="#{encoded_uri}"),
+          ~s(response="#{response}")
+        ] ++
+          algorithm_param(options, qop) ++
+          [
+            ~s(qop=#{qop}),
+            ~s(nc=#{nc_hex}),
+            ~s(cnonce="#{cnonce}")
+          ] ++ opaque_param(options),
         ","
       )
   end
 
-  @spec md5([String.t()]) :: String.t()
-  defp md5(value) do
-    value
-    |> Enum.join(":")
-    |> IO.iodata_to_binary()
-    |> :erlang.md5()
-    |> Base.encode16(case: :lower)
+  defp opaque_param(%{opaque: opaque}), do: [~s(opaque="#{opaque}")]
+  defp opaque_param(_options), do: []
+
+  # Servers that do not know `algorithm` reject a request that carries it unprompted.
+  defp algorithm_param(%{algorithm: algorithm} = options, qop) do
+    if qop != nil or sha256?(options), do: [~s(algorithm=#{algorithm})], else: []
   end
 
-  # Some responses do not have to return the Session ID
-  # If it does return one, it needs to match one stored in the state.
-  @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()} | {:error, reason :: any()}
+  defp algorithm_param(_options, _qop), do: []
+
+  defp sha256?(%{algorithm: algorithm}), do: String.upcase(algorithm, :ascii) == "SHA-256"
+  defp sha256?(_options), do: false
+
+  @spec digest_hash([String.t()], State.digest_opts()) :: String.t()
+  defp digest_hash(values, options) do
+    data = Enum.join(values, ":")
+    hash = if sha256?(options), do: :crypto.hash(:sha256, data), else: :erlang.md5(data)
+    Base.encode16(hash, case: :lower)
+  end
+
+  # Some responses do not have to return the Session ID.
+  # The first one received is used for the rest of the session. A server that later
+  # answers with a different one is not failed for it: libavformat keeps the first
+  # identifier as well, and failing here would cost a reply that is otherwise fine.
+  @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()}
   defp handle_session_id(%Response{} = response, %State{} = state) do
-    with {:ok, session_value} <- Response.get_header(response, "Session") do
-      [session_id | _rest] = String.split(session_value, ";")
+    case Response.parse_session_header(response) do
+      {:ok, %{session_id: session_id}} ->
+        case state do
+          %State{session_id: nil} ->
+            {:ok, %State{state | session_id: session_id}}
 
-      case state do
-        %State{session_id: nil} -> {:ok, %State{state | session_id: session_id}}
-        %State{session_id: ^session_id} -> {:ok, state}
-        _else -> {:error, :invalid_session_id}
-      end
-    else
-      {:error, :no_such_header} -> {:ok, state}
-    end
-  end
+          %State{session_id: ^session_id} ->
+            {:ok, state}
 
-  # Checks for the `nonce` and `realm` values in the `WWW-Authenticate` header.
-  # if they exist, sets `type` to `{:digest, opts}`
-  @spec detect_authentication_type(Response.t(), State.t()) :: {:ok, State.t()}
-  defp detect_authentication_type(%Response{} = response, state) do
-    with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
-      [_match, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
-      [_match, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
+          %State{session_id: current_session_id} ->
+            Logger.warning(
+              "Server answered with session id #{inspect(session_id)}, " <>
+                "keeping #{inspect(current_session_id)} that was established first"
+            )
 
-      qop =
-        case Regex.run(~r/qop=\"?([^",]+)\"?/, digest) do
-          [_match, qop_value] -> qop_value
-          nil -> nil
+            {:ok, state}
         end
-
-      auth_options = {:digest, %{nonce: nonce, realm: realm, qop: qop, nc: 1}}
-      {:ok, %{state | auth: auth_options}}
-    else
-      # non digest auth?
-      {:ok, _non_digest} ->
-        {:ok, %{state | auth: :basic}}
 
       {:error, :no_such_header} ->
         {:ok, state}
+    end
+  end
+
+  @spec detect_authentication_type(Response.t(), State.t()) :: {:ok, State.t()}
+  defp detect_authentication_type(%Response{headers: headers}, state) do
+    challenges =
+      for {name, value} <- headers,
+          String.downcase(name, :ascii) == "www-authenticate",
+          challenge <- parse_challenges(value),
+          do: challenge
+
+    case challenges do
+      [] -> {:ok, state}
+      challenges -> {:ok, %{state | auth: select_auth(challenges)}}
+    end
+  end
+
+  # A header usually carries one challenge, but may carry several, separated by commas
+  # like the parameters are (RFC 2617, section 1.2). A new challenge starts where a
+  # scheme name stands in front of a parameter. Within a challenge the first
+  # occurrence of a parameter counts.
+  @spec parse_challenges(binary()) :: [{scheme :: binary(), params :: %{binary() => binary()}}]
+  defp parse_challenges(header) when byte_size(header) > @max_challenge_size do
+    Logger.warning("Ignoring a WWW-Authenticate header of #{byte_size(header)} bytes")
+    []
+  end
+
+  defp parse_challenges(header) do
+    ~r/(?:([A-Za-z][A-Za-z0-9_-]*)[ \t]+)?([A-Za-z0-9_-]+)[ \t]*=[ \t]*(?:"([^"]*)"|([^\s,]*))/
+    |> Regex.scan(header)
+    |> Enum.reduce([], fn [_match, scheme, name | value], challenges ->
+      param = {String.downcase(name, :ascii), List.last(value)}
+
+      case {scheme, challenges} do
+        {"", [{scheme, params} | rest]} -> [{scheme, [param | params]} | rest]
+        {"", []} -> []
+        {scheme, challenges} -> [{String.downcase(scheme, :ascii), [param]} | challenges]
+      end
+    end)
+    |> case do
+      [] ->
+        [{header |> String.trim() |> String.downcase(:ascii), %{}}]
+
+      challenges ->
+        for {scheme, params} <- Enum.reverse(challenges), do: {scheme, Map.new(params)}
+    end
+  end
+
+  @spec select_auth([{binary(), map()}]) :: State.auth()
+  defp select_auth(challenges) do
+    digests = for {"digest", params} <- challenges, options = digest_options(params), do: options
+
+    # MD5 is what this client has always answered with, so it stays the first choice.
+    # SHA-256 (RFC 7616) is used when the server offers nothing else.
+    digest = Enum.find(digests, &(not sha256?(&1))) || List.first(digests)
+
+    cond do
+      digest != nil ->
+        {:digest, digest}
+
+      List.keymember?(challenges, "basic", 0) ->
+        :basic
+
+      true ->
+        schemes = Enum.map_join(challenges, ", ", &elem(&1, 0))
+
+        Logger.warning(
+          "No usable authentication challenge among: #{schemes}, falling back to Basic"
+        )
+
+        :basic
+    end
+  end
+
+  @spec digest_options(map()) :: State.digest_opts() | nil
+  defp digest_options(params) do
+    algorithm = params["algorithm"]
+
+    cond do
+      params["nonce"] in [nil, ""] ->
+        Logger.warning("Ignoring a Digest challenge without a nonce")
+        nil
+
+      algorithm != nil and String.upcase(algorithm, :ascii) not in ["MD5", "SHA-256"] ->
+        Logger.warning("Ignoring a Digest challenge with unsupported algorithm #{algorithm}")
+        nil
+
+      true ->
+        options = %{
+          nonce: params["nonce"],
+          realm: params["realm"] || "",
+          qop: select_qop(params["qop"]),
+          nc: 1
+        }
+
+        Enum.reduce([opaque: params["opaque"], algorithm: algorithm], options, fn
+          {_key, nil}, options -> options
+          {key, value}, options -> Map.put(options, key, value)
+        end)
+    end
+  end
+
+  @spec select_qop(binary() | nil) :: binary() | nil
+  defp select_qop(nil), do: nil
+
+  defp select_qop(qop) do
+    options = qop |> String.split(",") |> Enum.map(&String.trim/1)
+
+    if "auth" in options do
+      "auth"
+    else
+      Logger.warning("Unsupported Digest qop #{inspect(qop)}, authenticating without qop")
+      nil
     end
   end
 end

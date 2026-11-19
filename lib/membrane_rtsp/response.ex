@@ -3,6 +3,8 @@ defmodule Membrane.RTSP.Response do
   This module represents a RTSP response.
   """
 
+  require Logger
+
   @line_ending ["\r\n", "\r", "\n"]
 
   @enforce_keys [:status, :version]
@@ -55,13 +57,25 @@ defmodule Membrane.RTSP.Response do
   If the body is present it will be parsed according to `Content-Type` header.
   Currently only the `application/sdp` is supported.
   """
-  @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | :malformed_header}
+  @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | term()}
   def parse(response) do
-    [headers, body] = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
+    {headers, body} =
+      case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
+        [headers, body] ->
+          {headers, body}
+
+        [headers] ->
+          Logger.warning("RTSP message does not end its headers with an empty line")
+          {headers, ""}
+      end
 
     with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
-         {:ok, headers} <- parse_headers(headers),
+         {headers, malformed_lines} = parse_headers(headers),
          {:ok, body} <- parse_body(body, headers) do
+      Enum.each(malformed_lines, fn line ->
+        Logger.warning("Ignoring a malformed RTSP header line: #{inspect(line)}")
+      end)
+
       {:ok, %__MODULE__{response | headers: headers, body: body}}
     end
   end
@@ -94,6 +108,9 @@ defmodule Membrane.RTSP.Response do
   Verifies if raw response binary has got proper length by comparing `Content-Length` header value to actual size of body in response.
   Returns tuple with verdict, expected size and actual size of body
 
+  Only the headers are inspected, not the start line, so this also tells where a
+  request sent by the server ends.
+
   Example responses:
   `{:ok, 512, 512}` - `Content-Length` header value and body size matched. A response is complete.
   `{:ok, 0, 0}` - `Content-Length` header missing or set to 0 and no body. A response is complete.
@@ -106,32 +123,28 @@ defmodule Membrane.RTSP.Response do
   @spec verify_content_length(binary()) ::
           {:ok | :error, expected_size :: non_neg_integer(), actual_size :: non_neg_integer()}
   def verify_content_length(response) do
-    split_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
-    headers = Enum.at(split_response, 0)
-    body = Enum.at(split_response, 1)
-
-    with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
-         {:ok, headers} <- parse_headers(headers),
-         false <- is_nil(body),
-         body_size <- byte_size(body),
-         {:ok, content_length_str} <-
-           get_header(%__MODULE__{response | headers: headers}, "Content-Length") do
-      {content_length, _remainder} = Integer.parse(content_length_str)
-
-      if body_size == content_length do
-        {:ok, content_length, body_size}
-      else
-        {:error, content_length, body_size}
-      end
-    else
-      {:error, :no_such_header} when byte_size(body) == 0 ->
-        {:ok, 0, 0}
-
-      {:error, :no_such_header} ->
-        {:error, 0, byte_size(body)}
-
-      _other ->
+    case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
+      [_incomplete_headers] ->
         {:error, 0, 0}
+
+      [headers, body] ->
+        {headers, _malformed_lines} = headers |> drop_start_line() |> parse_headers()
+
+        content_length =
+          case find_header(headers, "Content-Length") do
+            {:ok, content_length} -> parse_content_length(content_length)
+            {:error, :no_such_header} -> 0
+          end
+
+        result_type = if byte_size(body) == content_length, do: :ok, else: :error
+        {result_type, content_length, byte_size(body)}
+    end
+  end
+
+  defp drop_start_line(message) do
+    case String.split(message, @line_ending, parts: 2) do
+      [_start_line, headers] -> headers
+      [_start_line] -> ""
     end
   end
 
@@ -167,6 +180,41 @@ defmodule Membrane.RTSP.Response do
   end
 
   @doc """
+  Returns the session id and the timeout from the `Session` header of a response.
+
+  The timeout is in seconds. It is `nil` when the header does not carry one.
+
+  ```
+    iex> response = Response.new(200) |> Response.with_header("Session", "12345678;timeout=60")
+    iex> Response.parse_session_header(response)
+    {:ok, %{session_id: "12345678", timeout: 60}}
+    iex> Response.parse_session_header(Response.new(200))
+    {:error, :no_such_header}
+
+  ```
+  """
+  @spec parse_session_header(t()) ::
+          {:ok, %{session_id: binary(), timeout: pos_integer() | nil}}
+          | {:error, :no_such_header}
+  def parse_session_header(%__MODULE__{} = response) do
+    with {:ok, value} <- get_header(response, "Session") do
+      [session_id | params] = value |> String.split(";") |> Enum.map(&String.trim/1)
+
+      {:ok, %{session_id: session_id, timeout: Enum.find_value(params, &parse_session_timeout/1)}}
+    end
+  end
+
+  defp parse_session_timeout(param) do
+    with [name, value] <- String.split(param, "=", parts: 2),
+         "timeout" <- name |> String.trim() |> String.downcase(:ascii),
+         {timeout, _rest} when timeout > 0 <- value |> String.trim() |> Integer.parse() do
+      timeout
+    else
+      _other -> nil
+    end
+  end
+
+  @doc """
   Returns true if the response is a success.
 
   ```
@@ -191,7 +239,7 @@ defmodule Membrane.RTSP.Response do
         [line, rest] -> {line, rest}
       end
 
-    case Regex.run(~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/, line) do
+    case Regex.run(~r/^RTSP\/(\d\.\d) (\d\d\d)(?: .*)?$/, line) do
       [_match, version, code] ->
         case Integer.parse(code) do
           :error ->
@@ -207,25 +255,66 @@ defmodule Membrane.RTSP.Response do
     end
   end
 
+  @spec parse_headers(binary()) ::
+          {headers :: [{binary(), binary()}], malformed_lines :: [binary()]}
   defp parse_headers(headers) do
-    headers
-    |> String.split(@line_ending)
-    |> Bunch.Enum.try_map(fn header ->
-      case String.split(header, ":", parts: 2) do
-        [name, " " <> value] -> {:ok, {name, value}}
-        _else -> {:error, {:malformed_header, header}}
-      end
-    end)
+    {headers, malformed_lines} =
+      headers
+      |> String.split(@line_ending)
+      |> Enum.reduce({[], []}, fn
+        "", acc ->
+          acc
+
+        <<char, _rest::binary>> = line, {[{name, value} | headers], malformed}
+        when char in [?\s, ?\t] ->
+          {[{name, String.trim(value <> " " <> String.trim(line))} | headers], malformed}
+
+        line, {headers, malformed} ->
+          case String.split(line, ":", parts: 2) do
+            [name, value] when name != "" -> {[{name, String.trim(value)} | headers], malformed}
+            _other -> {headers, [line | malformed]}
+          end
+      end)
+
+    {Enum.reverse(headers), Enum.reverse(malformed_lines)}
+  end
+
+  defp parse_content_length(value) do
+    case Integer.parse(value) do
+      {content_length, _remainder} when content_length >= 0 ->
+        content_length
+
+      _other ->
+        Logger.warning("Ignoring an invalid Content-Length header: #{inspect(value)}")
+        0
+    end
   end
 
   defp parse_body(data, headers) do
     case find_header(headers, "Content-Type") do
-      {:ok, "application/sdp"} ->
-        ExSDP.parse(data)
+      {:ok, content_type} ->
+        if sdp_content_type?(content_type), do: parse_sdp(data), else: {:ok, data}
 
-      _other ->
-        {:ok, data}
+      {:error, :no_such_header} ->
+        if sdp_version_line?(data) do
+          Logger.warning("RTSP response has no Content-Type, taking its body for SDP")
+          parse_sdp(data)
+        else
+          {:ok, data}
+        end
     end
+  end
+
+  defp sdp_version_line?(data) do
+    [first_line | _rest] = String.split(data, @line_ending, parts: 2)
+    String.trim(first_line) == "v=0"
+  end
+
+  defp parse_sdp(data), do: ExSDP.parse(data, lenient: true)
+
+  defp sdp_content_type?(content_type) do
+    [media_type | _parameters] = String.split(content_type, ";", parts: 2)
+    media_type |> String.trim() |> String.downcase(:ascii) == "application/sdp"
   end
 
   defp render_headers([]), do: ""
