@@ -136,9 +136,8 @@ defmodule Membrane.RTSP.Response do
             {:error, :no_such_header} -> 0
           end
 
-        if byte_size(body) == content_length,
-          do: {:ok, content_length, byte_size(body)},
-          else: {:error, content_length, byte_size(body)}
+        result_type = if byte_size(body) == content_length, do: :ok, else: :error
+        {result_type, content_length, byte_size(body)}
     end
   end
 
@@ -181,12 +180,9 @@ defmodule Membrane.RTSP.Response do
   end
 
   @doc """
-  Parses the `Session` header of a response.
+  Returns the session id and the timeout from the `Session` header of a response.
 
-  Returns the session identifier and the session timeout in seconds, or `nil`
-  for the timeout when the server did not announce a usable one. A client should
-  send a request more often than that, otherwise the server may close the session
-  (RFC 2326, section 12.37).
+  The timeout is in seconds. It is `nil` when the header does not carry one.
 
   ```
     iex> response = Response.new(200) |> Response.with_header("Session", "12345678;timeout=60")
@@ -259,7 +255,6 @@ defmodule Membrane.RTSP.Response do
     end
   end
 
-  # RFC 2616, section 4.2: a value may continue on lines that start with a space or a tab.
   @spec parse_headers(binary()) ::
           {headers :: [{binary(), binary()}], malformed_lines :: [binary()]}
   defp parse_headers(headers) do
