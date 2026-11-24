@@ -372,20 +372,24 @@ defmodule Membrane.RTSP do
     |> Base.encode16(case: :lower)
   end
 
-  # Some responses do not have to return the Session ID
-  # If it does return one, it needs to match one stored in the state.
-  @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()} | {:error, reason :: any()}
+  # Some responses do not have to return the Session ID.
+  # If it does return one that differs from the one stored in the state, the stored one is kept.
+  @spec handle_session_id(Response.t(), State.t()) :: {:ok, State.t()}
   defp handle_session_id(%Response{} = response, %State{} = state) do
-    with {:ok, session_value} <- Response.get_header(response, "Session") do
-      [session_id | _rest] = String.split(session_value, ";")
+    case Response.parse_session_header(response) do
+      {:ok, %{session_id: session_id}} when state.session_id in [session_id, nil] ->
+        {:ok, %State{state | session_id: session_id}}
 
-      case state do
-        %State{session_id: nil} -> {:ok, %State{state | session_id: session_id}}
-        %State{session_id: ^session_id} -> {:ok, state}
-        _else -> {:error, :invalid_session_id}
-      end
-    else
-      {:error, :no_such_header} -> {:ok, state}
+      {:ok, %{session_id: session_id}} ->
+        Logger.warning(
+          "Server answered with session id #{inspect(session_id)}, " <>
+            "keeping #{inspect(state.session_id)} that was established first"
+        )
+
+        {:ok, state}
+
+      {:error, :no_such_header} ->
+        {:ok, state}
     end
   end
 

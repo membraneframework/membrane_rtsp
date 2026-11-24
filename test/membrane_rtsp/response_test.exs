@@ -273,6 +273,62 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "parse_session_header/1" do
+    defp session(value), do: %Response{status: 200, version: "1.0", headers: [{"Session", value}]}
+
+    test "returns the session id and the timeout" do
+      assert Response.parse_session_header(session("12345678;timeout=60")) ==
+               {:ok, %{session_id: "12345678", timeout: 60}}
+    end
+
+    test "returns no timeout when the server does not announce one" do
+      assert Response.parse_session_header(session("12345678")) ==
+               {:ok, %{session_id: "12345678", timeout: nil}}
+    end
+
+    test "tolerates whitespace and case in the parameters" do
+      Enum.each(
+        [
+          "12345678; timeout=60",
+          "12345678 ;Timeout = 60",
+          " 12345678;foo=bar;TIMEOUT=60 "
+        ],
+        fn value ->
+          assert Response.parse_session_header(session(value)) ==
+                   {:ok, %{session_id: "12345678", timeout: 60}}
+        end
+      )
+    end
+
+    test "ignores a timeout that is not a positive number, with a warning" do
+      Enum.each(["0", "soon", ""], fn timeout ->
+        log =
+          ExUnit.CaptureLog.capture_log(fn ->
+            assert Response.parse_session_header(session("12345678;timeout=" <> timeout)) ==
+                     {:ok, %{session_id: "12345678", timeout: nil}}
+          end)
+
+        assert log =~ "Ignoring an invalid Session timeout: \"timeout=#{timeout}\""
+      end)
+    end
+
+    test "reads the number a timeout starts with, with a warning" do
+      Enum.each(["60s", "60.5"], fn timeout ->
+        log =
+          ExUnit.CaptureLog.capture_log(fn ->
+            assert Response.parse_session_header(session("12345678;timeout=" <> timeout)) ==
+                     {:ok, %{session_id: "12345678", timeout: 60}}
+          end)
+
+        assert log =~ "as 60 seconds"
+      end)
+    end
+
+    test "returns an error when there is no Session header" do
+      assert Response.parse_session_header(Response.new(200)) == {:error, :no_such_header}
+    end
+  end
+
   describe "Session description" do
     @camera_sdp """
     v=0

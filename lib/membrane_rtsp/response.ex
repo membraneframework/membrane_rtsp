@@ -177,6 +177,51 @@ defmodule Membrane.RTSP.Response do
   end
 
   @doc """
+  Returns the session id and the timeout from the `Session` header of a response.
+
+  The timeout is in seconds. It is `nil` when the header does not carry a valid one.
+
+  ```
+    iex> response = Response.new(200) |> Response.with_header("Session", "12345678;timeout=60")
+    iex> Response.parse_session_header(response)
+    {:ok, %{session_id: "12345678", timeout: 60}}
+    iex> Response.parse_session_header(Response.new(200))
+    {:error, :no_such_header}
+
+  ```
+  """
+  @spec parse_session_header(t()) ::
+          {:ok, %{session_id: binary(), timeout: pos_integer() | nil}}
+          | {:error, :no_such_header}
+  def parse_session_header(%__MODULE__{} = response) do
+    with {:ok, value} <- get_header(response, "Session") do
+      [session_id | params] = value |> String.split(";") |> Enum.map(&String.trim/1)
+
+      {:ok, %{session_id: session_id, timeout: Enum.find_value(params, &parse_session_timeout/1)}}
+    end
+  end
+
+  defp parse_session_timeout(param) do
+    with [name, value] <- String.split(param, "=", parts: 2),
+         "timeout" <- name |> String.trim() |> String.downcase(:ascii),
+         {:timeout, {timeout, rest}} when timeout > 0 <-
+           {:timeout, value |> String.trim() |> Integer.parse()} do
+      if rest != "" do
+        Logger.warning("Reading the Session timeout #{inspect(value)} as #{timeout} seconds")
+      end
+
+      timeout
+    else
+      {:timeout, _parse_result} ->
+        Logger.warning("Ignoring an invalid Session timeout: #{inspect(param)}")
+        nil
+
+      _other ->
+        nil
+    end
+  end
+
+  @doc """
   Returns true if the response is a success.
 
   ```
