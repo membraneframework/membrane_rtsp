@@ -57,13 +57,17 @@ defmodule Membrane.RTSP.Response do
   If the body is present it will be parsed according to `Content-Type` header.
   Currently only the `application/sdp` is supported.
   """
-  @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | :malformed_header}
+  @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | term()}
   def parse(response) do
     [headers, body] = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
 
     with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
-         {:ok, headers} <- parse_headers(headers),
+         {headers, malformed_lines} = parse_headers(headers),
          {:ok, body} <- parse_body(body, headers) do
+      Enum.each(malformed_lines, fn line ->
+        Logger.warning("Ignoring a malformed RTSP header line: #{inspect(line)}")
+      end)
+
       {:ok, %__MODULE__{response | headers: headers, body: body}}
     end
   end
@@ -113,7 +117,7 @@ defmodule Membrane.RTSP.Response do
     body = Enum.at(split_response, 1)
 
     with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
-         {:ok, headers} <- parse_headers(headers),
+         {headers, _malformed_lines} = parse_headers(headers),
          false <- is_nil(body),
          body_size <- byte_size(body),
          {:ok, content_length_str} <-
@@ -213,15 +217,28 @@ defmodule Membrane.RTSP.Response do
     end
   end
 
+  @spec parse_headers(binary()) ::
+          {headers :: [{binary(), binary()}], malformed_lines :: [binary()]}
   defp parse_headers(headers) do
-    headers
-    |> String.split(@line_ending)
-    |> Bunch.Enum.try_map(fn header ->
-      case String.split(header, ":", parts: 2) do
-        [name, " " <> value] -> {:ok, {name, value}}
-        _else -> {:error, {:malformed_header, header}}
-      end
-    end)
+    {headers, malformed_lines} =
+      headers
+      |> String.split(@line_ending)
+      |> Enum.reduce({[], []}, fn
+        "", acc ->
+          acc
+
+        <<char, _rest::binary>> = line, {[{name, value} | headers], malformed}
+        when char in [?\s, ?\t] ->
+          {[{name, String.trim(value <> " " <> String.trim(line))} | headers], malformed}
+
+        line, {headers, malformed} ->
+          case line |> String.split(":", parts: 2) |> Enum.map(&String.trim/1) do
+            [name, value] when name != "" -> {[{name, value} | headers], malformed}
+            _other -> {headers, [line | malformed]}
+          end
+      end)
+
+    {Enum.reverse(headers), Enum.reverse(malformed_lines)}
   end
 
   defp parse_body(data, headers) do

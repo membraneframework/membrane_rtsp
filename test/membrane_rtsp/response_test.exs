@@ -107,6 +107,71 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "Header lines" do
+    test "are parsed with no whitespace after the colon" do
+      assert {:ok, %Response{headers: headers}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq:1\r\nSession:abc;timeout=60\r\n\r\n")
+
+      assert headers == [{"CSeq", "1"}, {"Session", "abc;timeout=60"}]
+    end
+
+    test "are parsed with whitespace before the colon" do
+      assert {:ok, %Response{headers: headers}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq : 1\r\nSession\t: abc\r\n\r\n")
+
+      assert headers == [{"CSeq", "1"}, {"Session", "abc"}]
+    end
+
+    test "are parsed with several spaces or tabs around the value" do
+      assert {:ok, %Response{headers: headers}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq:  1 \r\nSession:\tabc\t\r\n\r\n")
+
+      assert headers == [{"CSeq", "1"}, {"Session", "abc"}]
+    end
+
+    test "are parsed when the value is empty" do
+      assert {:ok, %Response{headers: headers}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 1\r\nServer:\r\n\r\n")
+
+      assert headers == [{"CSeq", "1"}, {"Server", ""}]
+    end
+
+    test "may be absent altogether" do
+      assert {:ok, %Response{status: 200, headers: []}} =
+               Response.parse("RTSP/1.0 200 OK\r\n\r\n")
+    end
+
+    test "are unfolded when a value continues on the next line" do
+      assert {:ok, %Response{headers: headers}} =
+               Response.parse(
+                 "RTSP/1.0 200 OK\r\nCSeq: 1\r\nPublic: OPTIONS, DESCRIBE,\r\n SETUP,\r\n\tPLAY\r\n\r\n"
+               )
+
+      assert headers == [{"CSeq", "1"}, {"Public", "OPTIONS, DESCRIBE, SETUP, PLAY"}]
+    end
+
+    test "that have no colon are skipped instead of failing the whole response" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{status: 200, headers: headers}} =
+                   Response.parse(
+                     "RTSP/1.0 200 OK\r\nCSeq: 1\r\nbroken line\r\nSession: abc\r\n\r\n"
+                   )
+
+          assert headers == [{"CSeq", "1"}, {"Session", "abc"}]
+        end)
+
+      assert log =~ "broken line"
+    end
+
+    test "verify_content_length/1 waits for the body when no space follows the colon" do
+      assert Response.verify_content_length(
+               "RTSP/1.0 200 OK\r\nCSeq:2\r\nContent-Length:296\r\n\r\n"
+             ) ==
+               {:error, 296, 0}
+    end
+  end
+
   describe "Header lookup" do
     test "get_header/2 matches header names case-insensitively" do
       response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}
