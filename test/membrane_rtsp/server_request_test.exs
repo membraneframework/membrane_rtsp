@@ -163,6 +163,47 @@ defmodule Membrane.RTSP.ServerRequestTest do
 
       assert log =~ "unexpected packet"
     end
+
+    test "gives up on a response when the server keeps sending something else", ctx do
+      task = request(ctx.session)
+      assert "OPTIONS " <> _rest = receive_from_client(ctx.server)
+
+      server = ctx.server
+
+      sender =
+        Task.async(fn ->
+          Enum.each(1..40, fn _n ->
+            :gen_tcp.send(server, <<"$", 0, 4::16, 1, 2, 3, 4>>)
+            Process.sleep(50)
+          end)
+        end)
+
+      started = System.monotonic_time(:millisecond)
+      assert {:error, :timeout} = Task.await(task, 3_000)
+      assert System.monotonic_time(:millisecond) - started < 1_800
+      Task.await(sender, 5_000)
+    end
+
+    test "stops when the socket reports an error", ctx do
+      Process.flag(:trap_exit, true)
+      session = ctx.session
+      socket = RTSP.get_socket(session)
+
+      capture_log(fn ->
+        send(session, {:tcp_error, socket, :etimedout})
+        assert_receive {:EXIT, ^session, {:socket_error, :etimedout}}, 1_000
+      end)
+    end
+
+    test "survives a message that it does not know", ctx do
+      log =
+        capture_log(fn ->
+          send(ctx.session, :something_else)
+          assert is_port(RTSP.get_socket(ctx.session))
+        end)
+
+      assert log =~ "something_else"
+    end
   end
 
   describe "while another process reads the socket" do
@@ -199,6 +240,30 @@ defmodule Membrane.RTSP.ServerRequestTest do
         end)
 
       assert log =~ "CSeq: 41"
+    end
+  end
+
+  describe "with response_timeout: :infinity" do
+    test "a response is awaited whoever reads the socket" do
+      {:ok, listen_socket} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true])
+      {:ok, port} = :inet.port(listen_socket)
+      on_exit(fn -> :gen_tcp.close(listen_socket) end)
+
+      {:ok, session} =
+        RTSP.start_link("rtsp://localhost:#{port}/stream", response_timeout: :infinity)
+
+      {:ok, server} = :gen_tcp.accept(listen_socket, 1_000)
+
+      task = request(session)
+      assert "OPTIONS " <> _rest = receive_from_client(server)
+      :ok = :gen_tcp.send(server, "RTSP/1.0 200 OK\r\nCSeq: 0\r\n\r\n")
+      assert {:ok, %RTSP.Response{status: 200}} = Task.await(task)
+
+      :ok = RTSP.transfer_socket_control(session, self())
+      task = request(session)
+      assert "OPTIONS " <> _rest = receive_from_client(server)
+      :ok = RTSP.handle_response(session, "RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n")
+      assert {:ok, %RTSP.Response{status: 200}} = Task.await(task)
     end
   end
 end

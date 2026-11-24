@@ -23,7 +23,7 @@ defmodule Membrane.RTSP.Transport do
   @spec execute(
           binary(),
           :gen_tcp.socket(),
-          non_neg_integer() | nil,
+          timeout() | nil,
           :socket | :external_process,
           binary()
         ) :: {:ok, binary()} | {:error, :closed | :timeout | :inet.posix()}
@@ -34,7 +34,7 @@ defmodule Membrane.RTSP.Transport do
 
     result =
       with :ok <- mockable(:gen_tcp).send(socket, request) do
-        recv(socket, response_timeout, 0, pending_data)
+        recv(socket, deadline(response_timeout), 0, pending_data)
       end
 
     :inet.setopts(socket, active: true)
@@ -43,9 +43,15 @@ defmodule Membrane.RTSP.Transport do
 
   def execute(request, socket, response_timeout, :external_process, _pending_data) do
     with :ok <- mockable(:gen_tcp).send(socket, request) do
-      await_response(socket, response_timeout || @response_timeout)
+      await_response(socket, deadline(response_timeout))
     end
   end
+
+  defp deadline(:infinity), do: :infinity
+  defp deadline(timeout), do: System.monotonic_time(:millisecond) + (timeout || @response_timeout)
+
+  defp time_left(:infinity), do: :infinity
+  defp time_left(deadline), do: max(deadline - System.monotonic_time(:millisecond), 0)
 
   @spec reply_to_server_request(:gen_tcp.socket(), binary()) :: :ok
   def reply_to_server_request(socket, request) do
@@ -85,17 +91,17 @@ defmodule Membrane.RTSP.Transport do
     end
   end
 
-  defp await_response(socket, timeout) do
+  defp await_response(socket, deadline) do
     receive do
       {:raw_response, message} ->
         if ServerRequest.request?(message) do
           reply_to_server_request(socket, message)
-          await_response(socket, timeout)
+          await_response(socket, deadline)
         else
           {:ok, message}
         end
     after
-      timeout -> {:error, :timeout}
+      time_left(deadline) -> {:error, :timeout}
     end
   end
 
@@ -104,41 +110,41 @@ defmodule Membrane.RTSP.Transport do
     :gen_tcp.close(socket)
   end
 
-  defp recv(socket, response_timeout, length \\ 0, acc \\ <<>>) do
-    with {:ok, data} <- do_recv(socket, response_timeout, length, acc) do
-      handle_received(data, socket, response_timeout)
+  defp recv(socket, deadline, length \\ 0, acc \\ <<>>) do
+    with {:ok, data} <- do_recv(socket, deadline, length, acc) do
+      handle_received(data, socket, deadline)
     end
   end
 
-  defp handle_received(<<>>, socket, response_timeout) do
-    recv(socket, response_timeout)
+  defp handle_received(<<>>, socket, deadline) do
+    recv(socket, deadline)
   end
 
   # skip rtp/rtcp packets
   defp handle_received(
          <<"$", _channel::8, size::16, _rtp::binary-size(size), rest::binary>>,
          socket,
-         response_timeout
+         deadline
        ) do
-    handle_received(rest, socket, response_timeout)
+    handle_received(rest, socket, deadline)
   end
 
-  defp handle_received(<<"$", _rest::binary>> = data, socket, response_timeout) do
-    recv(socket, response_timeout, 0, data)
+  defp handle_received(<<"$", _rest::binary>> = data, socket, deadline) do
+    recv(socket, deadline, 0, data)
   end
 
-  defp handle_received(data, socket, response_timeout) do
+  defp handle_received(data, socket, deadline) do
     case split_message(data) do
-      {:ok, message, rest} -> handle_message(message, rest, socket, response_timeout)
-      {:incomplete, missing_bytes} -> recv(socket, response_timeout, missing_bytes, data)
+      {:ok, message, rest} -> handle_message(message, rest, socket, deadline)
+      {:incomplete, missing_bytes} -> recv(socket, deadline, missing_bytes, data)
     end
   end
 
-  defp handle_message(message, rest, socket, response_timeout) do
+  defp handle_message(message, rest, socket, deadline) do
     cond do
       ServerRequest.request?(message) ->
         reply_to_server_request(socket, message)
-        handle_received(rest, socket, response_timeout)
+        handle_received(rest, socket, deadline)
 
       rest == <<>> ->
         {:ok, message}
@@ -158,14 +164,15 @@ defmodule Membrane.RTSP.Transport do
     end
   end
 
-  defp do_recv(socket, response_timeout, length, acc) do
-    case mockable(:gen_tcp).recv(
-           socket,
-           length,
-           response_timeout || @response_timeout
-         ) do
-      {:ok, data} -> {:ok, acc <> data}
-      {:error, reason} -> {:error, reason}
+  defp do_recv(socket, deadline, length, acc) do
+    case time_left(deadline) do
+      0 ->
+        {:error, :timeout}
+
+      time_left ->
+        with {:ok, data} <- mockable(:gen_tcp).recv(socket, length, time_left) do
+          {:ok, acc <> data}
+        end
     end
   end
 end

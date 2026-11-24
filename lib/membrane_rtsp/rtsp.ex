@@ -12,7 +12,7 @@ defmodule Membrane.RTSP do
 
   @type options() :: [option()]
   @type option() ::
-          {:connection_timeout, non_neg_integer()} | {:response_timeout, non_neg_integer()}
+          {:connection_timeout, non_neg_integer()} | {:response_timeout, timeout()}
 
   @default_rtsp_port 554
   @max_unsolicited_data_size 4096
@@ -38,7 +38,7 @@ defmodule Membrane.RTSP do
             uri: URI.t(),
             session_id: binary() | nil,
             auth: auth(),
-            response_timeout: non_neg_integer() | nil,
+            response_timeout: timeout() | nil,
             receive_from: :socket | :external_process,
             retries: non_neg_integer(),
             unsolicited_data: binary(),
@@ -237,8 +237,19 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
+  def handle_info({:tcp_error, _socket, reason}, state) do
+    {:stop, {:socket_error, reason}, state}
+  end
+
+  @impl true
   def handle_info({:tcp_closed, _socket}, state) do
     {:stop, :socket_closed, state}
+  end
+
+  @impl true
+  def handle_info(message, state) do
+    Logger.warning("Ignoring an unexpected message: #{inspect(message)}")
+    {:noreply, state}
   end
 
   @impl true
