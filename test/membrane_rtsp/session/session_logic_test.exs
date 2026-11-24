@@ -511,6 +511,68 @@ defmodule Membrane.RTSP.SessionLogicTest do
     end
   end
 
+  describe "Credentials in the URL" do
+    test "are percent-decoded before use", %{state: %State{} = state, request: request} do
+      mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+        assert serialized_request =~
+                 "\r\nAuthorization: Basic #{Base.encode64("ad:min:p@ss/w#rd")}\r\n"
+
+        mock_response(serialized_request)
+      end)
+
+      parsed_uri = URI.parse("rtsp://ad%3Amin:p%40ss%2Fw%23rd@localhost:5554/vod/mp4:name.mov")
+      state = %State{state | uri: parsed_uri, auth: :basic}
+
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
+    end
+
+    test "are percent-decoded for Digest too", %{state: %State{} = state, request: request} do
+      # MD5("login:realm:p@ss") combined with MD5("OPTIONS:<uri>") and the nonce
+      ha1 = md5_hex("login:realm:p@ss")
+      ha2 = md5_hex("OPTIONS:rtsp://localhost:5554/vod/mp4:name.mov")
+      expected = md5_hex("#{ha1}:nonce:#{ha2}")
+
+      mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+        assert serialized_request =~ ~s(username="login")
+        assert serialized_request =~ ~s(response="#{expected}")
+        mock_response(serialized_request)
+      end)
+
+      parsed_uri = URI.parse("rtsp://login:p%40ss@localhost:5554/vod/mp4:name.mov")
+
+      auth =
+        {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 1, opaque: nil, algorithm: nil}}
+
+      state = %State{state | uri: parsed_uri, auth: auth}
+
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
+    end
+
+    test "may lack a password without crashing Digest", %{
+      state: %State{} = state,
+      request: request
+    } do
+      mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+        assert serialized_request =~ ~s(username="login")
+        mock_response(serialized_request)
+      end)
+
+      parsed_uri = URI.parse("rtsp://login@localhost:5554/vod/mp4:name.mov")
+
+      auth =
+        {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 1, opaque: nil, algorithm: nil}}
+
+      state = %State{state | uri: parsed_uri, auth: auth}
+
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
+    end
+
+    defp md5_hex(data), do: data |> :erlang.md5() |> Base.encode16(case: :lower)
+  end
+
   defp mock_response(request) do
     [_line, rest] = String.split(request, "\r\n", parts: 2)
     {:ok, @response_header <> rest}
