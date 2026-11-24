@@ -6,7 +6,7 @@ defmodule Membrane.RTSP do
 
   require Logger
   alias Membrane.RTSP
-  alias Membrane.RTSP.{Request, Response, Transport}
+  alias Membrane.RTSP.{Request, Response, ServerRequest, Transport}
 
   @type t() :: pid()
 
@@ -15,6 +15,7 @@ defmodule Membrane.RTSP do
           {:connection_timeout, non_neg_integer()} | {:response_timeout, non_neg_integer()}
 
   @default_rtsp_port 554
+  @max_unsolicited_data_size 4096
   @max_challenge_size 4096
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
@@ -40,6 +41,7 @@ defmodule Membrane.RTSP do
             response_timeout: non_neg_integer() | nil,
             receive_from: :socket | :external_process,
             retries: non_neg_integer(),
+            unsolicited_data: binary(),
             content_base: binary() | nil,
             append_control_to_base?: boolean()
           }
@@ -52,6 +54,7 @@ defmodule Membrane.RTSP do
                   auth: nil,
                   receive_from: :socket,
                   retries: 0,
+                  unsolicited_data: <<>>,
                   content_base: nil,
                   append_control_to_base?: false
                 ]
@@ -98,6 +101,10 @@ defmodule Membrane.RTSP do
     GenServer.call(session, :get_socket)
   end
 
+  @doc """
+  Passes an RTSP message read from the socket to the session. To be called by the
+  process that took over the socket with `transfer_socket_control/2`.
+  """
   @spec handle_response(t(), binary()) :: :ok
   def handle_response(session, raw_response) do
     send(session, {:raw_response, raw_response})
@@ -204,8 +211,28 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_info({:tcp, _socket, data}, state) do
-    Logger.warning("Received an unexpected packet, ignoring: #{inspect(data)}")
+  def handle_info({:tcp, _socket, data}, %State{} = state) do
+    case Transport.reply_to_server_requests(state.socket, state.unsolicited_data <> data) do
+      <<>> ->
+        {:noreply, %State{state | unsolicited_data: <<>>}}
+
+      rest ->
+        if ServerRequest.request?(rest) and byte_size(rest) <= @max_unsolicited_data_size do
+          {:noreply, %State{state | unsolicited_data: rest}}
+        else
+          Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
+          {:noreply, %State{state | unsolicited_data: <<>>}}
+        end
+    end
+  end
+
+  @impl true
+  def handle_info({:raw_response, message}, %State{} = state) do
+    case Transport.reply_to_server_requests(state.socket, message) do
+      <<>> -> :ok
+      rest -> Logger.warning("Received an unexpected packet, ignoring: #{inspect(rest)}")
+    end
+
     {:noreply, state}
   end
 
@@ -251,7 +278,7 @@ defmodule Membrane.RTSP do
     |> Request.with_header("User-Agent", @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
-    |> Transport.execute(socket, response_timeout, state.receive_from)
+    |> Transport.execute(socket, response_timeout, state.receive_from, state.unsolicited_data)
   end
 
   @spec inject_session_header(Request.t(), binary() | nil) :: Request.t()
@@ -303,8 +330,11 @@ defmodule Membrane.RTSP do
 
   @spec handle_execute_call(Request.t(), boolean(), State.t()) ::
           {:reply, Response.result(), State.t()}
-  defp handle_execute_call(request, retry, state) do
-    with {:ok, raw_response} <- execute(request, state),
+  defp handle_execute_call(request, retry, %State{} = state) do
+    result = execute(request, state)
+    state = %State{state | unsolicited_data: <<>>}
+
+    with {:ok, raw_response} <- result,
          {:ok, response, state} <- parse_response(raw_response, state) do
       case response do
         %Response{status: 401} when retry ->

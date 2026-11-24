@@ -108,6 +108,9 @@ defmodule Membrane.RTSP.Response do
   Verifies if raw response binary has got proper length by comparing `Content-Length` header value to actual size of body in response.
   Returns tuple with verdict, expected size and actual size of body
 
+  Only the headers are inspected, not the start line, so this also tells where a
+  request sent by the server ends.
+
   Example responses:
   `{:ok, 512, 512}` - `Content-Length` header value and body size matched. A response is complete.
   `{:ok, 0, 0}` - `Content-Length` header missing or set to 0 and no body. A response is complete.
