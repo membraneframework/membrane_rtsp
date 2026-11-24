@@ -3,6 +3,8 @@ defmodule Membrane.RTSP.Response do
   This module represents a RTSP response.
   """
 
+  require Logger
+
   @line_ending ["\r\n", "\r", "\n"]
 
   @enforce_keys [:status, :version]
@@ -191,8 +193,12 @@ defmodule Membrane.RTSP.Response do
         [line, rest] -> {line, rest}
       end
 
-    case Regex.run(~r/^RTSP\/(\d\.\d) (\d\d\d) [A-Z a-z]+$/, line) do
-      [_match, version, code] ->
+    case Regex.run(~r/^RTSP\/(\d\.\d) (\d\d\d)( .*)?$/, line) do
+      [_match, version, code | reason_phrase] ->
+        if reason_phrase == [] do
+          Logger.warning("RTSP status line ends right after the status code: #{inspect(line)}")
+        end
+
         case Integer.parse(code) do
           :error ->
             {:error, :invalid_status_code}

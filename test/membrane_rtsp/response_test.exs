@@ -63,6 +63,50 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "Status line" do
+    test "is parsed with a warning when the status code is the last thing in it" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{status: 200, version: "1.0"}} =
+                   Response.parse("RTSP/1.0 200\r\nCSeq: 1\r\n\r\n")
+        end)
+
+      assert log =~ "ends right after the status code"
+    end
+
+    test "is parsed without a warning when the reason phrase is empty" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{status: 200}} =
+                   Response.parse("RTSP/1.0 200 \r\nCSeq: 1\r\n\r\n")
+        end)
+
+      refute log =~ "ends right after the status code"
+    end
+
+    test "is parsed when the reason phrase holds digits and punctuation" do
+      Enum.each(["Bad Request (invalid URL)", "RTSP Version-1 not supported", "OK."], fn reason ->
+        assert {:ok, %Response{status: 400}} =
+                 Response.parse("RTSP/1.0 400 #{reason}\r\nCSeq: 1\r\n\r\n")
+      end)
+    end
+
+    test "is rejected when it does not start with an RTSP version and a status code" do
+      Enum.each(
+        [
+          "HTTP/1.1 200 OK",
+          "RTSP/1.0 OK",
+          "RTSP/1.0 20 OK",
+          "RTSP/1.0 2000 OK",
+          "garbage"
+        ],
+        fn line ->
+          assert {:error, :invalid_start_line} = Response.parse(line <> "\r\nCSeq: 1\r\n\r\n")
+        end
+      )
+    end
+  end
+
   describe "Header lookup" do
     test "get_header/2 matches header names case-insensitively" do
       response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}
