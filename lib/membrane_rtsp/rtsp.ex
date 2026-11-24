@@ -39,7 +39,9 @@ defmodule Membrane.RTSP do
             auth: auth(),
             response_timeout: non_neg_integer() | nil,
             receive_from: :socket | :external_process,
-            retries: non_neg_integer()
+            retries: non_neg_integer(),
+            content_base: binary() | nil,
+            append_control_to_base?: boolean()
           }
 
     @enforce_keys [:socket, :uri, :response_timeout]
@@ -49,7 +51,9 @@ defmodule Membrane.RTSP do
                   cseq: 0,
                   auth: nil,
                   receive_from: :socket,
-                  retries: 0
+                  retries: 0,
+                  content_base: nil,
+                  append_control_to_base?: false
                 ]
   end
 
@@ -125,6 +129,10 @@ defmodule Membrane.RTSP do
   @spec record(t(), headers()) :: Response.result()
   def record(session, headers \\ []), do: request(session, "RECORD", headers)
 
+  @doc """
+  If the server rejects the request, it is sent once more with `path` appended to the base
+  URL of the session description.
+  """
   @spec setup(t(), binary(), headers()) :: Response.result()
   def setup(session, path, headers \\ []), do: request(session, "SETUP", headers, "", path)
 
@@ -164,8 +172,16 @@ defmodule Membrane.RTSP do
   end
 
   @impl true
-  def handle_call({:execute, request}, _from, state) do
-    handle_execute_call(request, true, state)
+  def handle_call({:execute, %Request{method: "SETUP"} = request}, _from, %State{} = state) do
+    execute_setup(request, state)
+  end
+
+  @impl true
+  def handle_call({:execute, request}, _from, %State{} = state) do
+    with {:reply, {:ok, %Response{} = response}, state} <-
+           handle_execute_call(request, true, state) do
+      {:reply, {:ok, response}, store_content_base(request, response, state)}
+    end
   end
 
   @impl true
@@ -299,6 +315,106 @@ defmodule Membrane.RTSP do
       end
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  @spec store_content_base(Request.t(), Response.t(), State.t()) :: State.t()
+  defp store_content_base(%Request{method: "DESCRIBE"}, %Response{} = response, %State{} = state) do
+    content_base =
+      with true <- Response.ok?(response),
+           {:ok, value} <- base_url_of_description(response) do
+        parse_content_base(value)
+      else
+        _other -> nil
+      end
+
+    %State{state | content_base: content_base}
+  end
+
+  defp store_content_base(_request, _response, state), do: state
+
+  @spec parse_content_base(binary()) :: binary() | nil
+  defp parse_content_base(value) do
+    value
+    |> String.trim()
+    |> URI.parse()
+    |> case do
+      %URI{scheme: scheme, host: host} = content_base
+      when scheme in ["rtsp", "rtsps"] and is_binary(host) and host != "" ->
+        URI.to_string(%URI{content_base | userinfo: nil})
+
+      _other ->
+        Logger.warning("Ignoring a base URL that is not an absolute RTSP URL: #{inspect(value)}")
+        nil
+    end
+  end
+
+  # A session-level control attribute that holds a URL takes precedence over the
+  # Content-Base header.
+  @spec base_url_of_description(Response.t()) :: {:ok, binary()} | {:error, :no_such_header}
+  defp base_url_of_description(%Response{body: %ExSDP{} = sdp} = response) do
+    case ExSDP.get_attribute(sdp, "control") do
+      {"control", "rtsp" <> _rest = url} -> {:ok, url}
+      _other -> Response.get_header(response, "Content-Base")
+    end
+  end
+
+  defp base_url_of_description(response), do: Response.get_header(response, "Content-Base")
+
+  # If the server rejects the SETUP, it is retried with the control path appended to
+  # the base URL. Once that works, the following SETUPs use that form right away.
+  @spec execute_setup(Request.t(), State.t()) :: {:reply, Response.result(), State.t()}
+  defp execute_setup(%Request{} = request, %State{} = state) do
+    request_url = Request.process_uri(request, state.uri)
+
+    case appended_control_url(request, state) do
+      url when url in [nil, request_url] ->
+        handle_execute_call(request, true, state)
+
+      url when state.append_control_to_base? ->
+        handle_execute_call(%Request{request | path: url}, true, state)
+
+      url ->
+        with {:reply, {:ok, %Response{status: status}}, %State{} = state}
+             when status not in 200..299 and status not in [401, 461] <-
+               handle_execute_call(request, true, state) do
+          Logger.warning(
+            "SETUP of #{request_url} was rejected with status #{status}, " <>
+              "retrying with the control path appended to the base URL: #{url}"
+          )
+
+          retry_setup(%Request{request | path: url}, state)
+        end
+    end
+  end
+
+  @spec retry_setup(Request.t(), State.t()) :: {:reply, Response.result(), State.t()}
+  defp retry_setup(request, state) do
+    case handle_execute_call(request, true, state) do
+      {:reply, {:ok, %Response{status: status}} = result, %State{} = state}
+      when status in 200..299 ->
+        {:reply, result, %State{state | append_control_to_base?: true}}
+
+      {:reply, result, %State{} = state} ->
+        {:reply, result, state}
+    end
+  end
+
+  @spec appended_control_url(Request.t(), State.t()) :: binary() | nil
+  defp appended_control_url(%Request{path: path}, _state) when path in [nil, "", "*"], do: nil
+
+  defp appended_control_url(%Request{path: path}, %State{uri: %URI{} = uri} = state) do
+    base = state.content_base || URI.to_string(%URI{uri | userinfo: nil})
+
+    case {URI.parse(path), path} do
+      {%URI{host: nil}, "?" <> _query} ->
+        base <> path
+
+      {%URI{host: nil}, _path} ->
+        String.trim_trailing(base, "/") <> "/" <> String.trim_leading(path, "/")
+
+      _absolute ->
+        nil
     end
   end
 

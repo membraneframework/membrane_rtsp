@@ -217,6 +217,192 @@ defmodule Membrane.RTSP.SessionLogicTest do
     end
   end
 
+  describe "Content-Base" do
+    @base "rtsp://localhost:5554/cam/realmonitor?channel=1&subtype=0"
+
+    defp mock_server(describe_headers, setup_status) do
+      describe_headers = Enum.map_join(describe_headers, &(&1 <> "\r\n"))
+
+      mock(:gen_tcp, [send: 2], fn _socket, request ->
+        [request_line | _rest] = String.split(request, "\r\n")
+        send(self(), {:request_line, request_line})
+
+        case String.split(request_line, " ") do
+          ["DESCRIBE", _url, _version] ->
+            {:ok, "RTSP/1.0 200 OK\r\n#{describe_headers}\r\n"}
+
+          ["SETUP", url, _version] ->
+            {:ok, "RTSP/1.0 #{setup_status.(url)} Whatever\r\n\r\n"}
+        end
+      end)
+    end
+
+    defp execute(state, method, path \\ nil) do
+      assert {:reply, {:ok, response}, state} =
+               RTSP.handle_call({:execute, %Request{method: method, path: path}}, nil, state)
+
+      {response.status, state}
+    end
+
+    defp request_lines() do
+      receive do
+        {:request_line, line} -> [line | request_lines()]
+      after
+        0 -> []
+      end
+    end
+
+    setup %{state: %State{} = state} do
+      [state: %State{state | uri: URI.parse(@base), session_id: nil}]
+    end
+
+    test "is used for a relative control path once the server rejects the request URL",
+         %{state: state} do
+      mock_server(["Content-Base: #{@base}/"], fn url ->
+        if url == "#{@base}/trackID=0" or url == "#{@base}/trackID=1", do: 200, else: 404
+      end)
+
+      {200, state} = execute(state, "DESCRIBE")
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {200, state} = execute(state, "SETUP", "trackID=0")
+          assert {200, _state} = execute(state, "SETUP", "trackID=1")
+        end)
+
+      assert log =~ "rejected with status 404"
+
+      assert request_lines() == [
+               "DESCRIBE #{@base} RTSP/1.0",
+               "SETUP rtsp://localhost:5554/cam/realmonitor/trackID=0 RTSP/1.0",
+               "SETUP #{@base}/trackID=0 RTSP/1.0",
+               "SETUP #{@base}/trackID=1 RTSP/1.0"
+             ]
+    end
+
+    test "joins the base and the control path with exactly one slash", %{state: state} do
+      mock_server(["content-base:  rtsp://user:pass@10.0.0.7:554/live"], fn url ->
+        if url == "rtsp://10.0.0.7:554/live/trackID=0", do: 200, else: 404
+      end)
+
+      {200, state} = execute(state, "DESCRIBE")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {200, _state} = execute(state, "SETUP", "/trackID=0")
+      end)
+
+      assert List.last(request_lines()) == "SETUP rtsp://10.0.0.7:554/live/trackID=0 RTSP/1.0"
+    end
+
+    test "changes nothing when the server accepts the request URL", %{state: state} do
+      mock_server(["Content-Base: #{@base}/"], fn _url -> 200 end)
+
+      {200, state} = execute(state, "DESCRIBE")
+      assert {200, _state} = execute(state, "SETUP", "trackID=0")
+
+      assert request_lines() == [
+               "DESCRIBE #{@base} RTSP/1.0",
+               "SETUP rtsp://localhost:5554/cam/realmonitor/trackID=0 RTSP/1.0"
+             ]
+    end
+
+    test "being absent, a rejected SETUP is retried with the path appended after the query",
+         %{state: state} do
+      mock_server([], fn url -> if url == "#{@base}/trackID=0", do: 200, else: 404 end)
+
+      {200, state} = execute(state, "DESCRIBE")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {200, _state} = execute(state, "SETUP", "trackID=0")
+      end)
+
+      assert request_lines() == [
+               "DESCRIBE #{@base} RTSP/1.0",
+               "SETUP rtsp://localhost:5554/cam/realmonitor/trackID=0 RTSP/1.0",
+               "SETUP #{@base}/trackID=0 RTSP/1.0"
+             ]
+    end
+
+    test "gives way to a URL in the control attribute of the session", %{state: %State{} = state} do
+      sdp =
+        "v=0\r\ns=x\r\na=control:rtsp://localhost:5554/media/video1/?orig=1\r\nm=video 0 RTP/AVP 96\r\n"
+
+      mock_server(
+        [
+          "Content-Type: application/sdp",
+          "Content-Base: rtsp://localhost:5554/media/video1/",
+          "Content-Length: #{byte_size(sdp)}\r\n\r\n#{sdp}" |> String.trim_trailing("\r\n")
+        ],
+        fn url ->
+          if url == "rtsp://localhost:5554/media/video1/?orig=1/trackID=0", do: 200, else: 404
+        end
+      )
+
+      {200, state} =
+        execute(%State{state | uri: URI.parse("rtsp://localhost:5554/stream1")}, "DESCRIBE")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {200, _state} = execute(state, "SETUP", "trackID=0")
+      end)
+
+      assert List.last(request_lines()) ==
+               "SETUP rtsp://localhost:5554/media/video1/?orig=1/trackID=0 RTSP/1.0"
+    end
+
+    test "takes a control path that is a query without a slash in between", %{
+      state: %State{} = state
+    } do
+      mock_server(["Content-Base: rtsp://localhost:5554/live/main"], fn url ->
+        if url == "rtsp://localhost:5554/live/main?ctype=video", do: 200, else: 404
+      end)
+
+      {200, state} =
+        execute(%State{state | uri: URI.parse("rtsp://localhost:5554/live")}, "DESCRIBE")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {200, _state} = execute(state, "SETUP", "?ctype=video")
+      end)
+
+      assert [_describe, "SETUP rtsp://localhost:5554/live?ctype=video RTSP/1.0", _retried] =
+               request_lines()
+    end
+
+    test "is not tried when it cannot give another URL or another URL cannot help",
+         %{state: %State{} = state} do
+      plain = "rtsp://localhost:5554/live"
+
+      Enum.each(
+        [
+          {plain, [], 404, "trackID=0"},
+          {plain, ["Content-Base: /relative/"], 404, "trackID=0"},
+          {plain, ["Content-Base: #{plain}/"], 404, "trackID=0"},
+          {@base, ["Content-Base: #{@base}/"], 461, "trackID=0"},
+          {@base, ["Content-Base: #{@base}/"], 404, "rtsp://localhost:5554/other/trackID=0"}
+        ],
+        fn {uri, headers, status, control} ->
+          mock_server(headers, fn _url -> status end)
+          state = %State{state | uri: URI.parse(uri)}
+
+          {200, state} = execute(state, "DESCRIBE")
+          assert {^status, _state} = execute(state, "SETUP", control)
+          assert [_describe, _setup] = request_lines()
+        end
+      )
+    end
+
+    test "is ignored with a warning when it is not an absolute RTSP URL",
+         %{state: %State{} = state} do
+      mock_server(["Content-Base: /relative/"], fn _url -> 200 end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {200, %State{content_base: nil}} = execute(state, "DESCRIBE")
+        end)
+
+      assert log =~ ~s(Ignoring a base URL that is not an absolute RTSP URL: "/relative/")
+    end
+  end
+
   describe "WWW-Authenticate challenge" do
     defp authenticate(state, request, www_authenticate_headers) do
       headers = Enum.map_join(www_authenticate_headers, &"WWW-Authenticate: #{&1}\r\n")
