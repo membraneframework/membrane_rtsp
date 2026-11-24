@@ -25,7 +25,8 @@ defmodule Membrane.RTSP do
             nonce: String.t(),
             qop: String.t() | nil,
             nc: non_neg_integer(),
-            opaque: String.t() | nil
+            opaque: String.t() | nil,
+            algorithm: String.t() | nil
           }
 
     @type auth() :: nil | :basic | {:digest, digest_opts()}
@@ -320,14 +321,14 @@ defmodule Membrane.RTSP do
   defp encode_digest(request, %URI{userinfo: userinfo} = uri, options) do
     [username, password] = String.split(userinfo, ":", parts: 2)
     encoded_uri = Request.process_uri(request, uri)
-    ha1 = md5([username, options.realm, password])
-    ha2 = md5([request.method, encoded_uri])
+    ha1 = digest_hash([username, options.realm, password], options)
+    ha2 = digest_hash([request.method, encoded_uri], options)
 
     encode_digest_auth(username, encoded_uri, ha1, ha2, options)
   end
 
   defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: nil} = options) do
-    response = md5([ha1, options.nonce, ha2])
+    response = digest_hash([ha1, options.nonce, ha2], options)
 
     "Digest " <>
       Enum.join(
@@ -337,7 +338,7 @@ defmodule Membrane.RTSP do
           ~s(nonce="#{options.nonce}"),
           ~s(uri="#{encoded_uri}"),
           ~s(response="#{response}")
-        ] ++ opaque_param(options),
+        ] ++ algorithm_param(options, nil) ++ opaque_param(options),
         ", "
       )
   end
@@ -346,7 +347,7 @@ defmodule Membrane.RTSP do
     nc = options[:nc] || 1
     nc_hex = :io_lib.format("~8.16.0b", [nc]) |> IO.iodata_to_binary()
     cnonce = :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
-    response = md5([ha1, options.nonce, nc_hex, cnonce, qop, ha2])
+    response = digest_hash([ha1, options.nonce, nc_hex, cnonce, qop, ha2], options)
 
     "Digest " <>
       Enum.join(
@@ -355,12 +356,14 @@ defmodule Membrane.RTSP do
           ~s(realm="#{options.realm}"),
           ~s(nonce="#{options.nonce}"),
           ~s(uri="#{encoded_uri}"),
-          ~s(response="#{response}"),
-          ~s(algorithm=MD5),
-          ~s(qop=#{qop}),
-          ~s(nc=#{nc_hex}),
-          ~s(cnonce="#{cnonce}")
-        ] ++ opaque_param(options),
+          ~s(response="#{response}")
+        ] ++
+          algorithm_param(options, qop) ++
+          [
+            ~s(qop=#{qop}),
+            ~s(nc=#{nc_hex}),
+            ~s(cnonce="#{cnonce}")
+          ] ++ opaque_param(options),
         ","
       )
   end
@@ -368,13 +371,20 @@ defmodule Membrane.RTSP do
   defp opaque_param(%{opaque: nil}), do: []
   defp opaque_param(%{opaque: opaque}), do: [~s(opaque="#{opaque}")]
 
-  @spec md5([String.t()]) :: String.t()
-  defp md5(value) do
-    value
-    |> Enum.join(":")
-    |> IO.iodata_to_binary()
-    |> :erlang.md5()
-    |> Base.encode16(case: :lower)
+  defp algorithm_param(%{algorithm: nil}, _qop), do: []
+
+  defp algorithm_param(%{algorithm: algorithm} = options, qop) do
+    if qop != nil or sha256?(options), do: [~s(algorithm=#{algorithm})], else: []
+  end
+
+  defp sha256?(%{algorithm: nil}), do: false
+  defp sha256?(%{algorithm: algorithm}), do: String.upcase(algorithm, :ascii) == "SHA-256"
+
+  @spec digest_hash([String.t()], State.digest_opts()) :: String.t()
+  defp digest_hash(values, options) do
+    data = Enum.join(values, ":")
+    hash = if sha256?(options), do: :crypto.hash(:sha256, data), else: :erlang.md5(data)
+    Base.encode16(hash, case: :lower)
   end
 
   # Some responses do not have to return the Session ID.
@@ -484,9 +494,15 @@ defmodule Membrane.RTSP do
 
   @spec digest_options(map()) :: State.digest_opts() | nil
   defp digest_options(params) do
+    algorithm = params["algorithm"]
+
     cond do
       params["nonce"] in [nil, ""] ->
         Logger.warning("Ignoring a Digest challenge without a nonce")
+        nil
+
+      algorithm != nil and String.upcase(algorithm, :ascii) not in ["MD5", "SHA-256"] ->
+        Logger.warning("Ignoring a Digest challenge with unsupported algorithm #{algorithm}")
         nil
 
       true ->
@@ -499,7 +515,8 @@ defmodule Membrane.RTSP do
           realm: params["realm"] || "",
           qop: select_qop(params["qop"]),
           nc: 1,
-          opaque: params["opaque"]
+          opaque: params["opaque"],
+          algorithm: algorithm
         }
     end
   end

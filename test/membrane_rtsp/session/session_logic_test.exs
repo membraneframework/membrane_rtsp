@@ -140,7 +140,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
     assert state.auth ==
-             {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 2, opaque: nil}}
+             {:digest,
+              %{nonce: "nonce", realm: "realm", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
   end
 
   test "add digest information with qop in the state (RFC 2617)", %{
@@ -155,7 +156,15 @@ defmodule Membrane.RTSP.SessionLogicTest do
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
     assert state.auth ==
-             {:digest, %{nonce: "abc123", realm: "VIVOTEK", qop: "auth", nc: 2, opaque: nil}}
+             {:digest,
+              %{
+                nonce: "abc123",
+                realm: "VIVOTEK",
+                qop: "auth",
+                nc: 2,
+                opaque: nil,
+                algorithm: nil
+              }}
   end
 
   test "add digest information with unquoted qop", %{state: state, request: request} do
@@ -167,7 +176,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
     assert state.auth ==
-             {:digest, %{nonce: "xyz", realm: "test", qop: "auth", nc: 2, opaque: nil}}
+             {:digest,
+              %{nonce: "xyz", realm: "test", qop: "auth", nc: 2, opaque: nil, algorithm: nil}}
   end
 
   describe "Session header" do
@@ -221,16 +231,19 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     test "with unquoted parameter values is understood", %{state: state, request: request} do
       assert authenticate(state, request, ["Digest realm=cam, nonce=abc123"]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
+               {:digest,
+                %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
     end
 
     test "is understood whatever the case of the scheme and of parameter names",
          %{state: state, request: request} do
       assert authenticate(state, request, [~s(digest Realm="cam", NONCE="abc123")]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
+               {:digest,
+                %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
 
       assert authenticate(state, request, [~s(DIGEST realm = "cam" ,nonce = "abc123")]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
+               {:digest,
+                %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
     end
 
     test "offering Basic before Digest selects Digest", %{state: state, request: request} do
@@ -238,7 +251,46 @@ defmodule Membrane.RTSP.SessionLogicTest do
                ~s(Basic realm="cam"),
                ~s(Digest realm="cam", nonce="abc123")
              ]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
+               {:digest,
+                %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
+    end
+
+    test "that comes first is chosen when several can be used", %{state: state, request: request} do
+      assert authenticate(state, request, [
+               ~s(Digest realm="cam", nonce="sha", algorithm=SHA-256),
+               ~s(Digest realm="cam", nonce="md5", algorithm=MD5)
+             ]) ==
+               {:digest,
+                %{nonce: "sha", realm: "cam", qop: nil, nc: 2, algorithm: "SHA-256", opaque: nil}}
+
+      assert authenticate(state, request, [
+               ~s(Digest realm="cam", nonce="md5", algorithm=MD5),
+               ~s(Digest realm="cam", nonce="sha", algorithm=SHA-256)
+             ]) ==
+               {:digest,
+                %{nonce: "md5", realm: "cam", qop: nil, nc: 2, algorithm: "MD5", opaque: nil}}
+    end
+
+    test "naming only SHA-256 is accepted", %{state: state, request: request} do
+      assert authenticate(state, request, [
+               ~s(Digest realm="cam", nonce="sha", algorithm="sha-256")
+             ]) ==
+               {:digest,
+                %{nonce: "sha", realm: "cam", qop: nil, nc: 2, algorithm: "sha-256", opaque: nil}}
+    end
+
+    test "with an unsupported digest algorithm is skipped", %{state: state, request: request} do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert authenticate(state, request, [
+                   ~s(Digest realm="cam", nonce="x", algorithm=SHA-512-256),
+                   ~s(Digest realm="cam", nonce="md5")
+                 ]) ==
+                   {:digest,
+                    %{nonce: "md5", realm: "cam", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
+        end)
+
+      assert log =~ "SHA-512-256"
     end
 
     test "without a realm is answered with an empty realm and a warning",
@@ -246,7 +298,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
       log =
         ExUnit.CaptureLog.capture_log(fn ->
           assert authenticate(state, request, [~s(Digest nonce="abc")]) ==
-                   {:digest, %{nonce: "abc", realm: "", qop: nil, nc: 2, opaque: nil}}
+                   {:digest,
+                    %{nonce: "abc", realm: "", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
         end)
 
       assert log =~ "no realm"
@@ -256,6 +309,10 @@ defmodule Membrane.RTSP.SessionLogicTest do
          %{state: state, request: request} do
       ExUnit.CaptureLog.capture_log(fn ->
         assert authenticate(state, request, [~s(Digest realm="cam")]) == :basic
+
+        assert authenticate(state, request, [
+                 ~s(Digest realm="cam", nonce="x", algorithm=MD5-sess)
+               ]) == :basic
 
         assert authenticate(state, request, ["Digest"]) == :basic
       end)
@@ -274,11 +331,13 @@ defmodule Membrane.RTSP.SessionLogicTest do
                   realm: "digest-realm",
                   qop: "auth",
                   nc: 2,
-                  opaque: nil
+                  opaque: nil,
+                  algorithm: nil
                 }}
 
       assert authenticate(state, request, [~s(Basic realm="r", Digest realm="r", nonce="abc")]) ==
-               {:digest, %{nonce: "abc", realm: "r", qop: nil, nc: 2, opaque: nil}}
+               {:digest,
+                %{nonce: "abc", realm: "r", qop: nil, nc: 2, opaque: nil, algorithm: nil}}
 
       assert authenticate(state, request, [~s(Basic realm="r", Negotiate)]) == :basic
     end
@@ -326,7 +385,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
     parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
 
     digest_auth_options =
-      {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 1, opaque: nil}}
+      {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 1, opaque: nil, algorithm: nil}}
 
     state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
@@ -337,12 +396,12 @@ defmodule Membrane.RTSP.SessionLogicTest do
     credentials = "login:password"
 
     mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
-      # QOP auth includes: algorithm, qop, nc (8-digit hex), cnonce
+      # QOP auth includes: qop, nc (8-digit hex), cnonce
       assert String.contains?(serialized_request, "Authorization: Digest ")
       assert String.contains?(serialized_request, "username=\"login\"")
       assert String.contains?(serialized_request, "realm=\"realm\"")
       assert String.contains?(serialized_request, "nonce=\"nonce\"")
-      assert String.contains?(serialized_request, "algorithm=MD5")
+      refute String.contains?(serialized_request, "algorithm=")
       assert String.contains?(serialized_request, "qop=auth")
       assert String.contains?(serialized_request, "nc=00000001")
       assert String.contains?(serialized_request, "cnonce=")
@@ -353,7 +412,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
     parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
 
     digest_auth_options =
-      {:digest, %{nonce: "nonce", realm: "realm", qop: "auth", nc: 1, opaque: nil}}
+      {:digest,
+       %{nonce: "nonce", realm: "realm", qop: "auth", nc: 1, opaque: nil, algorithm: nil}}
 
     state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
@@ -362,11 +422,6 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     # nc should increment after successful request
     assert {:digest, %{nc: 2}} = new_state.auth
-  end
-
-  defp mock_response(request) do
-    [_line, rest] = String.split(request, "\r\n", parts: 2)
-    {:ok, @response_header <> rest}
   end
 
   describe "Digest opaque" do
@@ -379,7 +434,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
       assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
       assert state.auth ==
-               {:digest, %{nonce: "n", realm: "cam", qop: nil, nc: 2, opaque: "5ccc069c"}}
+               {:digest,
+                %{nonce: "n", realm: "cam", qop: nil, nc: 2, opaque: "5ccc069c", algorithm: nil}}
     end
 
     test "is echoed in the Authorization header", %{state: %State{} = state, request: request} do
@@ -392,7 +448,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
         end)
 
         auth =
-          {:digest, %{nonce: "n", realm: "cam", qop: qop, nc: 1, opaque: "5ccc069c"}}
+          {:digest,
+           %{nonce: "n", realm: "cam", qop: qop, nc: 1, opaque: "5ccc069c", algorithm: nil}}
 
         state = %State{state | uri: parsed_uri, auth: auth}
 
@@ -400,5 +457,62 @@ defmodule Membrane.RTSP.SessionLogicTest do
                  RTSP.handle_call({:execute, request}, nil, state)
       end)
     end
+  end
+
+  describe "Digest algorithm" do
+    @uri "rtsp://login:password@localhost:5554/vod/mp4:name.mov"
+
+    defp authorization(%State{} = state, request, digest_options) do
+      mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+        [authorization] = Regex.run(~r/Authorization: [^\r]*/, serialized_request)
+        send(self(), {:authorization, authorization})
+        mock_response(serialized_request)
+      end)
+
+      state = %State{state | uri: URI.parse(@uri), auth: {:digest, digest_options}}
+
+      assert {:reply, {:ok, _response}, _state} =
+               RTSP.handle_call({:execute, request}, nil, state)
+
+      assert_received {:authorization, authorization}
+      authorization
+    end
+
+    test "is sent back only when the challenge named one", %{
+      state: %State{} = state,
+      request: request
+    } do
+      options = %{nonce: "nonce", realm: "realm", qop: "auth", nc: 1, opaque: nil, algorithm: nil}
+
+      refute authorization(state, request, options) =~ "algorithm"
+      assert authorization(state, request, Map.put(options, :algorithm, "MD5")) =~ "algorithm=MD5"
+    end
+
+    test "SHA-256 is used for the response when the challenge asks for it",
+         %{state: %State{} = state, request: request} do
+      sha256 = fn data -> :crypto.hash(:sha256, data) |> Base.encode16(case: :lower) end
+      ha1 = sha256.("login:realm:password")
+      ha2 = sha256.("OPTIONS:rtsp://localhost:5554/vod/mp4:name.mov")
+      response = sha256.("#{ha1}:nonce:#{ha2}")
+
+      options = %{
+        nonce: "nonce",
+        realm: "realm",
+        qop: nil,
+        nc: 1,
+        algorithm: "SHA-256",
+        opaque: nil
+      }
+
+      authorization = authorization(state, request, options)
+
+      assert authorization =~ ~s(response="#{response}")
+      assert authorization =~ "algorithm=SHA-256"
+    end
+  end
+
+  defp mock_response(request) do
+    [_line, rest] = String.split(request, "\r\n", parts: 2)
+    {:ok, @response_header <> rest}
   end
 end
