@@ -169,19 +169,25 @@ defmodule Membrane.RTSP.Request do
     apply_path(%URI{uri | userinfo: nil}, request)
   end
 
-  defp apply_path(%URI{} = base_url, %__MODULE__{path: nil}), do: base_url
+  defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) when path in [nil, "", "*"],
+    do: base_url
 
   defp apply_path(%URI{} = base_url, %__MODULE__{path: path}) do
     %URI{} = parsed = URI.parse(path)
 
-    if parsed.host do
-      %URI{parsed | userinfo: nil} |> URI.to_string()
-    else
-      parsed.path
-      |> Path.relative_to(base_url.path)
-      |> then(&Path.join(base_url.path, &1))
-      |> then(&%URI{base_url | path: &1, query: nil})
-      |> URI.to_string()
+    cond do
+      parsed.host ->
+        %URI{parsed | userinfo: nil} |> URI.to_string()
+
+      parsed.path == nil ->
+        %URI{base_url | query: parsed.query} |> URI.to_string()
+
+      true ->
+        parsed.path
+        |> Path.relative_to(base_url.path)
+        |> then(&Path.join(base_url.path, &1))
+        |> then(&%URI{base_url | path: &1, query: parsed.query})
+        |> URI.to_string()
     end
   end
 
