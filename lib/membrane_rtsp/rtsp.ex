@@ -15,13 +15,14 @@ defmodule Membrane.RTSP do
           {:connection_timeout, non_neg_integer()} | {:response_timeout, non_neg_integer()}
 
   @default_rtsp_port 554
+  @max_challenge_size 4096
   @user_agent "MembraneRTSP/#{Mix.Project.config()[:version]} (Membrane Framework RTSP Client)"
 
   defmodule State do
     @moduledoc false
     @type digest_opts() :: %{
-            realm: String.t() | nil,
-            nonce: String.t() | nil,
+            realm: String.t(),
+            nonce: String.t(),
             qop: String.t() | nil,
             nc: non_neg_integer()
           }
@@ -393,29 +394,122 @@ defmodule Membrane.RTSP do
     end
   end
 
-  # Checks for the `nonce` and `realm` values in the `WWW-Authenticate` header.
-  # if they exist, sets `type` to `{:digest, opts}`
   @spec detect_authentication_type(Response.t(), State.t()) :: {:ok, State.t()}
-  defp detect_authentication_type(%Response{} = response, state) do
-    with {:ok, "Digest " <> digest} <- Response.get_header(response, "WWW-Authenticate") do
-      [_match, nonce] = Regex.run(~r/nonce=\"(?<nonce>.*)\"/U, digest)
-      [_match, realm] = Regex.run(~r/realm=\"(?<realm>.*)\"/U, digest)
+  defp detect_authentication_type(%Response{headers: headers}, state) do
+    challenges =
+      headers
+      |> Enum.filter(fn {name, _value} -> String.downcase(name, :ascii) == "www-authenticate" end)
+      |> Enum.flat_map(fn {_name, value} -> parse_challenges(value) end)
 
-      qop =
-        case Regex.run(~r/qop=\"?([^",]+)\"?/, digest) do
-          [_match, qop_value] -> qop_value
-          nil -> nil
+    case challenges do
+      [] -> {:ok, state}
+      challenges -> {:ok, %{state | auth: select_auth(challenges)}}
+    end
+  end
+
+  # Matches the places where a challenge starts: the beginning of the header and
+  # every comma that is followed by a scheme name and a parameter. It splits
+  #   Digest realm="a", nonce="b", Basic realm="c"
+  # into
+  #   Digest realm="a", nonce="b"
+  #   Basic realm="c"
+  @challenge_start ~r/(^|,)\s*(?=[\w-]+\s+[\w-]+\s*=)/
+
+  # Matches one parameter of a challenge: name=value or name="value".
+  @challenge_param ~r/([\w-]+)\s*=\s*("[^"]*"|[^\s,]*)/
+
+  @spec parse_challenges(binary()) :: [{scheme :: binary(), params :: %{binary() => binary()}}]
+  defp parse_challenges(header) when byte_size(header) > @max_challenge_size do
+    Logger.warning("Ignoring a WWW-Authenticate header of #{byte_size(header)} bytes")
+    []
+  end
+
+  defp parse_challenges(header) do
+    @challenge_start
+    |> Regex.split(header, trim: true)
+    |> Enum.map(&parse_challenge/1)
+  end
+
+  @spec parse_challenge(binary()) :: {scheme :: binary(), params :: %{binary() => binary()}}
+  defp parse_challenge(challenge) do
+    {scheme, params} =
+      case String.split(challenge, [" ", "\t"], parts: 2, trim: true) do
+        [scheme, params] -> {scheme, params}
+        [scheme] -> {scheme, ""}
+      end
+
+    {String.downcase(scheme, :ascii), parse_challenge_params(params)}
+  end
+
+  # If a parameter is repeated, its first occurrence counts.
+  @spec parse_challenge_params(binary()) :: %{binary() => binary()}
+  defp parse_challenge_params(params) do
+    @challenge_param
+    |> Regex.scan(params, capture: :all_but_first)
+    |> Enum.reverse()
+    |> Map.new(fn [name, value] -> {String.downcase(name, :ascii), String.trim(value, "\"")} end)
+  end
+
+  @spec select_auth([{binary(), map()}]) :: State.auth()
+  defp select_auth(challenges) do
+    digests =
+      challenges
+      |> Enum.filter(fn {scheme, _params} -> scheme == "digest" end)
+      |> Enum.map(fn {_scheme, params} -> digest_options(params) end)
+      |> Enum.reject(&is_nil/1)
+
+    digest = List.first(digests)
+
+    cond do
+      digest != nil ->
+        {:digest, digest}
+
+      List.keymember?(challenges, "basic", 0) ->
+        :basic
+
+      true ->
+        schemes = Enum.map_join(challenges, ", ", fn {scheme, _params} -> scheme end)
+
+        Logger.warning(
+          "No usable authentication challenge among: #{schemes}, falling back to Basic"
+        )
+
+        :basic
+    end
+  end
+
+  @spec digest_options(map()) :: State.digest_opts() | nil
+  defp digest_options(params) do
+    cond do
+      params["nonce"] in [nil, ""] ->
+        Logger.warning("Ignoring a Digest challenge without a nonce")
+        nil
+
+      true ->
+        if params["realm"] == nil do
+          Logger.warning("Digest challenge has no realm, authenticating with an empty one")
         end
 
-      auth_options = {:digest, %{nonce: nonce, realm: realm, qop: qop, nc: 1}}
-      {:ok, %{state | auth: auth_options}}
-    else
-      # non digest auth?
-      {:ok, _non_digest} ->
-        {:ok, %{state | auth: :basic}}
+        %{
+          nonce: params["nonce"],
+          realm: params["realm"] || "",
+          qop: select_qop(params["qop"]),
+          nc: 1
+        }
+    end
+  end
 
-      {:error, :no_such_header} ->
-        {:ok, state}
+  @spec select_qop(binary() | nil) :: binary() | nil
+  defp select_qop(nil), do: nil
+
+  defp select_qop(qop) do
+    options = qop |> String.split(",") |> Enum.map(&String.trim/1)
+
+    if "auth" in options do
+      "auth"
+    else
+      Logger.warning("Unsupported Digest qop #{inspect(qop)}, authenticating without qop")
+      nil
     end
   end
 end
