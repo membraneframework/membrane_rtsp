@@ -217,6 +217,118 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "Content-Type" do
+    @sdp "v=0\r\no=- 0 1 IN IP4 10.0.0.1\r\ns=Cam\r\n"
+
+    test "selects the SDP parser regardless of case" do
+      Enum.each(["Application/SDP", "APPLICATION/SDP", "application/Sdp"], fn content_type ->
+        assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
+                 Response.parse(
+                   "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: #{content_type}\r\n\r\n" <> @sdp
+                 )
+      end)
+    end
+
+    test "selects the SDP parser when it carries parameters" do
+      Enum.each(
+        [
+          "application/sdp; charset=utf-8",
+          "application/sdp;charset=UTF-8",
+          "application/sdp ;q=1"
+        ],
+        fn content_type ->
+          assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
+                   Response.parse(
+                     "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: #{content_type}\r\n\r\n" <> @sdp
+                   )
+        end
+      )
+    end
+
+    test "that is missing does not prevent an SDP body from being parsed" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{body: %ExSDP{session_name: "Cam"}}} =
+                   Response.parse(
+                     "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Length: 37\r\n\r\n" <> @sdp
+                   )
+        end)
+
+      assert log =~ "has no Content-Type"
+    end
+
+    test "that is missing leaves a body that is not SDP unparsed" do
+      assert {:ok, %Response{body: "packets_received: 10\r\n"}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\npackets_received: 10\r\n")
+
+      assert {:ok, %Response{body: "v=notsdp\r\nfoo: bar\r\n"}} =
+               Response.parse("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\nv=notsdp\r\nfoo: bar\r\n")
+    end
+
+    test "leaves a body of another type unparsed" do
+      assert {:ok, %Response{body: "v=0\r\n"}} =
+               Response.parse(
+                 "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/sdpx\r\n\r\nv=0\r\n"
+               )
+    end
+  end
+
+  describe "Session description" do
+    @camera_sdp """
+    v=0
+    o=RTSP Session 0 0 IN IP4 0.0.0.0
+    s=Media Server
+    c=IN IP4 0.0.0.0
+    t=0 0
+    a=control:*
+    m=video 0 RTP/AVP 96
+    t=0 0
+    b=X-AV:100
+    a=rtpmap:96 H264/90000
+    a=fmtp:96 packetization-mode=1;profile-level-id=4D001F;sprop-parameter-sets=Z00AH5WoFAFuQA==
+    a=control:trackID=0
+    m=application 0 RTP/AVP smart/1/90000
+    a=rtpmap:95 TP-LINK/90000
+    a=control:trackID=2
+    """
+
+    test "that breaks the SDP grammar is parsed as far as it can be" do
+      sdp = String.replace(@camera_sdp, "\n", "\r\n")
+
+      response =
+        "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/sdp\r\n" <>
+          "Content-Length: #{byte_size(sdp)}\r\n\r\n" <> sdp
+
+      assert {:error, _reason} = ExSDP.parse(sdp)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{status: 200, body: %ExSDP{media: [video, metadata]}}} =
+                   Response.parse(response)
+
+          assert %ExSDP.Attribute.RTPMapping{encoding: "H264", clock_rate: 90_000} =
+                   ExSDP.get_attribute(video, :rtpmap)
+
+          assert %ExSDP.Attribute.FMTP{packetization_mode: 1} =
+                   ExSDP.get_attribute(video, :fmtp)
+
+          assert {"control", "trackID=0"} = ExSDP.get_attribute(video, "control")
+          assert %ExSDP.Media{type: :application, fmt: "smart/1/90000"} = metadata
+        end)
+
+      Enum.each(
+        [
+          "o=RTSP Session 0 0",
+          "t=0 0",
+          "smart/1/90000"
+        ],
+        fn line ->
+          assert log =~ line
+        end
+      )
+    end
+  end
+
   describe "Header lookup" do
     test "get_header/2 matches header names case-insensitively" do
       response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}

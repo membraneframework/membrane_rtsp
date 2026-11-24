@@ -258,12 +258,29 @@ defmodule Membrane.RTSP.Response do
 
   defp parse_body(data, headers) do
     case find_header(headers, "Content-Type") do
-      {:ok, "application/sdp"} ->
-        ExSDP.parse(data)
+      {:ok, content_type} ->
+        if sdp_content_type?(content_type), do: parse_sdp(data), else: {:ok, data}
 
-      _other ->
-        {:ok, data}
+      {:error, :no_such_header} ->
+        if sdp_version_line?(data) do
+          Logger.warning("RTSP response has no Content-Type, taking its body for SDP")
+          parse_sdp(data)
+        else
+          {:ok, data}
+        end
     end
+  end
+
+  defp sdp_version_line?(data) do
+    [first_line | _rest] = String.split(data, @line_ending, parts: 2)
+    String.trim(first_line) == "v=0"
+  end
+
+  defp parse_sdp(data), do: ExSDP.parse(data, lenient: true)
+
+  defp sdp_content_type?(content_type) do
+    [media_type | _parameters] = String.split(content_type, ";", parts: 2)
+    media_type |> String.trim() |> String.downcase(:ascii) == "application/sdp"
   end
 
   defp render_headers([]), do: ""
