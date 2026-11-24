@@ -139,7 +139,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
-    assert state.auth == {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 2}}
+    assert state.auth ==
+             {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 2, opaque: nil}}
   end
 
   test "add digest information with qop in the state (RFC 2617)", %{
@@ -153,7 +154,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
-    assert state.auth == {:digest, %{nonce: "abc123", realm: "VIVOTEK", qop: "auth", nc: 2}}
+    assert state.auth ==
+             {:digest, %{nonce: "abc123", realm: "VIVOTEK", qop: "auth", nc: 2, opaque: nil}}
   end
 
   test "add digest information with unquoted qop", %{state: state, request: request} do
@@ -164,7 +166,8 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
 
-    assert state.auth == {:digest, %{nonce: "xyz", realm: "test", qop: "auth", nc: 2}}
+    assert state.auth ==
+             {:digest, %{nonce: "xyz", realm: "test", qop: "auth", nc: 2, opaque: nil}}
   end
 
   describe "Session header" do
@@ -218,16 +221,16 @@ defmodule Membrane.RTSP.SessionLogicTest do
 
     test "with unquoted parameter values is understood", %{state: state, request: request} do
       assert authenticate(state, request, ["Digest realm=cam, nonce=abc123"]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
     end
 
     test "is understood whatever the case of the scheme and of parameter names",
          %{state: state, request: request} do
       assert authenticate(state, request, [~s(digest Realm="cam", NONCE="abc123")]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
 
       assert authenticate(state, request, [~s(DIGEST realm = "cam" ,nonce = "abc123")]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
     end
 
     test "offering Basic before Digest selects Digest", %{state: state, request: request} do
@@ -235,7 +238,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
                ~s(Basic realm="cam"),
                ~s(Digest realm="cam", nonce="abc123")
              ]) ==
-               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2}}
+               {:digest, %{nonce: "abc123", realm: "cam", qop: nil, nc: 2, opaque: nil}}
     end
 
     test "without a realm is answered with an empty realm and a warning",
@@ -243,7 +246,7 @@ defmodule Membrane.RTSP.SessionLogicTest do
       log =
         ExUnit.CaptureLog.capture_log(fn ->
           assert authenticate(state, request, [~s(Digest nonce="abc")]) ==
-                   {:digest, %{nonce: "abc", realm: "", qop: nil, nc: 2}}
+                   {:digest, %{nonce: "abc", realm: "", qop: nil, nc: 2, opaque: nil}}
         end)
 
       assert log =~ "no realm"
@@ -270,11 +273,12 @@ defmodule Membrane.RTSP.SessionLogicTest do
                   nonce: "abc",
                   realm: "digest-realm",
                   qop: "auth",
-                  nc: 2
+                  nc: 2,
+                  opaque: nil
                 }}
 
       assert authenticate(state, request, [~s(Basic realm="r", Digest realm="r", nonce="abc")]) ==
-               {:digest, %{nonce: "abc", realm: "r", qop: nil, nc: 2}}
+               {:digest, %{nonce: "abc", realm: "r", qop: nil, nc: 2, opaque: nil}}
 
       assert authenticate(state, request, [~s(Basic realm="r", Negotiate)]) == :basic
     end
@@ -320,7 +324,9 @@ defmodule Membrane.RTSP.SessionLogicTest do
     end)
 
     parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
-    digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 1}}
+
+    digest_auth_options =
+      {:digest, %{nonce: "nonce", realm: "realm", qop: nil, nc: 1, opaque: nil}}
 
     state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
@@ -345,7 +351,9 @@ defmodule Membrane.RTSP.SessionLogicTest do
     end)
 
     parsed_uri = URI.parse("rtsp://#{credentials}@localhost:5554/vod/mp4:name.mov")
-    digest_auth_options = {:digest, %{nonce: "nonce", realm: "realm", qop: "auth", nc: 1}}
+
+    digest_auth_options =
+      {:digest, %{nonce: "nonce", realm: "realm", qop: "auth", nc: 1, opaque: nil}}
 
     state = %State{state | uri: parsed_uri, auth: digest_auth_options}
 
@@ -359,5 +367,38 @@ defmodule Membrane.RTSP.SessionLogicTest do
   defp mock_response(request) do
     [_line, rest] = String.split(request, "\r\n", parts: 2)
     {:ok, @response_header <> rest}
+  end
+
+  describe "Digest opaque" do
+    test "is stored when the challenge carries it", %{state: state, request: request} do
+      mock(:gen_tcp, [send: 2], fn _socket, _request ->
+        {:ok,
+         "RTSP/1.0 200 OK\r\nWWW-Authenticate: Digest realm=\"cam\", nonce=\"n\", opaque=\"5ccc069c\"\r\n\r\n"}
+      end)
+
+      assert {:reply, {:ok, _response}, state} = RTSP.handle_call({:execute, request}, nil, state)
+
+      assert state.auth ==
+               {:digest, %{nonce: "n", realm: "cam", qop: nil, nc: 2, opaque: "5ccc069c"}}
+    end
+
+    test "is echoed in the Authorization header", %{state: %State{} = state, request: request} do
+      parsed_uri = URI.parse("rtsp://login:password@localhost:5554/vod/mp4:name.mov")
+
+      Enum.each([nil, "auth"], fn qop ->
+        mock(:gen_tcp, [send: 2], fn _socket, serialized_request ->
+          assert serialized_request =~ ~s(opaque="5ccc069c")
+          mock_response(serialized_request)
+        end)
+
+        auth =
+          {:digest, %{nonce: "n", realm: "cam", qop: qop, nc: 1, opaque: "5ccc069c"}}
+
+        state = %State{state | uri: parsed_uri, auth: auth}
+
+        assert {:reply, {:ok, _response}, _state} =
+                 RTSP.handle_call({:execute, request}, nil, state)
+      end)
+    end
   end
 end

@@ -24,7 +24,8 @@ defmodule Membrane.RTSP do
             realm: String.t(),
             nonce: String.t(),
             qop: String.t() | nil,
-            nc: non_neg_integer()
+            nc: non_neg_integer(),
+            opaque: String.t() | nil
           }
 
     @type auth() :: nil | :basic | {:digest, digest_opts()}
@@ -328,17 +329,17 @@ defmodule Membrane.RTSP do
   defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: nil} = options) do
     response = md5([ha1, options.nonce, ha2])
 
-    Enum.join(
-      [
-        "Digest",
-        ~s(username="#{username}",),
-        ~s(realm="#{options.realm}",),
-        ~s(nonce="#{options.nonce}",),
-        ~s(uri="#{encoded_uri}",),
-        ~s(response="#{response}")
-      ],
-      " "
-    )
+    "Digest " <>
+      Enum.join(
+        [
+          ~s(username="#{username}"),
+          ~s(realm="#{options.realm}"),
+          ~s(nonce="#{options.nonce}"),
+          ~s(uri="#{encoded_uri}"),
+          ~s(response="#{response}")
+        ] ++ opaque_param(options),
+        ", "
+      )
   end
 
   defp encode_digest_auth(username, encoded_uri, ha1, ha2, %{qop: qop} = options) do
@@ -359,10 +360,13 @@ defmodule Membrane.RTSP do
           ~s(qop=#{qop}),
           ~s(nc=#{nc_hex}),
           ~s(cnonce="#{cnonce}")
-        ],
+        ] ++ opaque_param(options),
         ","
       )
   end
+
+  defp opaque_param(%{opaque: nil}), do: []
+  defp opaque_param(%{opaque: opaque}), do: [~s(opaque="#{opaque}")]
 
   @spec md5([String.t()]) :: String.t()
   defp md5(value) do
@@ -494,7 +498,8 @@ defmodule Membrane.RTSP do
           nonce: params["nonce"],
           realm: params["realm"] || "",
           qop: select_qop(params["qop"]),
-          nc: 1
+          nc: 1,
+          opaque: params["opaque"]
         }
     end
   end
