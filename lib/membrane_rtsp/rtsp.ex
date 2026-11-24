@@ -10,9 +10,18 @@ defmodule Membrane.RTSP do
 
   @type t() :: pid()
 
+  @typedoc """
+  Options of a session:
+  * `:connection_timeout` - time in milliseconds to wait for the TCP connection.
+  * `:response_timeout` - time in milliseconds to wait for a response to a request.
+  * `:user_agent` - value of the `User-Agent` header sent with every request.
+    When not given, the value returned by `user_agent/0` is sent.
+  """
   @type options() :: [option()]
   @type option() ::
-          {:connection_timeout, non_neg_integer()} | {:response_timeout, timeout()}
+          {:connection_timeout, non_neg_integer()}
+          | {:response_timeout, timeout()}
+          | {:user_agent, binary()}
 
   @default_rtsp_port 554
   @max_unsolicited_data_size 4096
@@ -41,6 +50,7 @@ defmodule Membrane.RTSP do
             response_timeout: timeout() | nil,
             receive_from: :socket | :external_process,
             retries: non_neg_integer(),
+            user_agent: binary() | nil,
             unsolicited_data: binary(),
             content_base: binary() | nil,
             append_control_to_base?: boolean()
@@ -54,6 +64,7 @@ defmodule Membrane.RTSP do
                   auth: nil,
                   receive_from: :socket,
                   retries: 0,
+                  user_agent: nil,
                   unsolicited_data: <<>>,
                   content_base: nil,
                   append_control_to_base?: false
@@ -169,7 +180,8 @@ defmodule Membrane.RTSP do
         socket: socket,
         uri: url,
         response_timeout: options[:response_timeout],
-        auth: auth_type
+        auth: auth_type,
+        user_agent: options[:user_agent]
       }
 
       {:ok, state}
@@ -286,7 +298,7 @@ defmodule Membrane.RTSP do
     |> inject_session_header(session_id)
     |> inject_content_length()
     |> Request.with_header("CSeq", cseq |> to_string())
-    |> Request.with_header("User-Agent", @user_agent)
+    |> Request.with_header("User-Agent", state.user_agent || @user_agent)
     |> apply_credentials(uri, state.auth)
     |> Request.stringify(uri)
     |> Transport.execute(socket, response_timeout, state.receive_from, state.unsolicited_data)
