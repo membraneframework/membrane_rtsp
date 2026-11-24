@@ -59,7 +59,15 @@ defmodule Membrane.RTSP.Response do
   """
   @spec parse(binary()) :: {:ok, t()} | {:error, :invalid_start_line | term()}
   def parse(response) do
-    [headers, body] = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
+    {headers, body} =
+      case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
+        [headers, body] ->
+          {headers, body}
+
+        [headers] ->
+          Logger.warning("RTSP message does not end its headers with an empty line")
+          {headers, ""}
+      end
 
     with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
          {headers, malformed_lines} = parse_headers(headers),
@@ -112,32 +120,28 @@ defmodule Membrane.RTSP.Response do
   @spec verify_content_length(binary()) ::
           {:ok | :error, expected_size :: non_neg_integer(), actual_size :: non_neg_integer()}
   def verify_content_length(response) do
-    split_response = String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2)
-    headers = Enum.at(split_response, 0)
-    body = Enum.at(split_response, 1)
+    case String.split(response, ["\r\n\r\n", "\n\n", "\r\r"], parts: 2) do
+      [headers, body] ->
+        {headers, _malformed_lines} = headers |> drop_start_line() |> parse_headers()
 
-    with {:ok, {%__MODULE__{} = response, headers}} <- parse_start_line(headers),
-         {headers, _malformed_lines} = parse_headers(headers),
-         false <- is_nil(body),
-         body_size <- byte_size(body),
-         {:ok, content_length_str} <-
-           get_header(%__MODULE__{response | headers: headers}, "Content-Length") do
-      {content_length, _remainder} = Integer.parse(content_length_str)
+        content_length =
+          case find_header(headers, "Content-Length") do
+            {:ok, content_length} -> parse_content_length(content_length)
+            {:error, :no_such_header} -> 0
+          end
 
-      if body_size == content_length do
-        {:ok, content_length, body_size}
-      else
-        {:error, content_length, body_size}
-      end
-    else
-      {:error, :no_such_header} when byte_size(body) == 0 ->
-        {:ok, 0, 0}
+        result_type = if byte_size(body) == content_length, do: :ok, else: :error
+        {result_type, content_length, byte_size(body)}
 
-      {:error, :no_such_header} ->
-        {:error, 0, byte_size(body)}
-
-      _other ->
+      [_incomplete_headers] ->
         {:error, 0, 0}
+    end
+  end
+
+  defp drop_start_line(message) do
+    case String.split(message, @line_ending, parts: 2) do
+      [_start_line, headers] -> headers
+      [_start_line] -> ""
     end
   end
 
@@ -239,6 +243,17 @@ defmodule Membrane.RTSP.Response do
       end)
 
     {Enum.reverse(headers), Enum.reverse(malformed_lines)}
+  end
+
+  defp parse_content_length(value) do
+    case Integer.parse(value) do
+      {content_length, _remainder} when content_length >= 0 ->
+        content_length
+
+      _other ->
+        Logger.warning("Ignoring an invalid Content-Length header: #{inspect(value)}")
+        0
+    end
   end
 
   defp parse_body(data, headers) do

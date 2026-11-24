@@ -172,6 +172,51 @@ defmodule Membrane.RTSP.ResponseTest do
     end
   end
 
+  describe "verify_content_length/1" do
+    test "recognises a message that consists of a start line only" do
+      assert Response.verify_content_length("RTSP/1.0 200 OK\r\n\r\n") == {:ok, 0, 0}
+    end
+
+    test "keeps waiting while the headers are incomplete, without complaining about them" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert Response.verify_content_length("RTSP/1.0 200 OK\r\nCSeq: 5\r\nContent-Le") ==
+                   {:error, 0, 0}
+
+          assert Response.verify_content_length("RTSP/1.0 200 OK\r\nCSe") == {:error, 0, 0}
+
+          assert Response.verify_content_length("GET_PARAMETER rtsp://cam/stream RTSP/1.0\r\n") ==
+                   {:error, 0, 0}
+        end)
+
+      assert log == ""
+    end
+  end
+
+  describe "Truncated or garbled input" do
+    test "parse/1 does not raise when the blank line after the headers is missing" do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %Response{status: 200, headers: [{"CSeq", "1"}], body: ""}} =
+                   Response.parse("RTSP/1.0 200 OK\r\nCSeq: 1\r\n")
+        end)
+
+      assert log =~ "does not end its headers with an empty line"
+    end
+
+    test "verify_content_length/1 treats an unparsable Content-Length as absent" do
+      assert Response.verify_content_length(
+               "RTSP/1.0 200 OK\r\nCSeq: 1\r\nContent-Length: abc\r\n\r\n"
+             ) ==
+               {:ok, 0, 0}
+
+      assert Response.verify_content_length(
+               "RTSP/1.0 200 OK\r\nCSeq: 1\r\nContent-Length: -5\r\n\r\n"
+             ) ==
+               {:ok, 0, 0}
+    end
+  end
+
   describe "Header lookup" do
     test "get_header/2 matches header names case-insensitively" do
       response = %Response{status: 200, version: "1.0", headers: [{"content-LENGTH", "0"}]}
