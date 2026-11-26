@@ -110,7 +110,7 @@ defmodule Membrane.RTSP.ServerLogicTest do
       v=0
       o=- 0 0 IN IP4 127.0.0.1
       s=No Name
-      b=X-YZ:256
+      b=AS:fast
       """
 
       mock(:gen_tcp, [send: 2], fn %{}, response ->

@@ -1,7 +1,7 @@
 defmodule Membrane.RTSP.MixProject do
   use Mix.Project
 
-  @version "0.12.2"
+  @version "0.13.0"
   @github_url "https://github.com/membraneframework/membrane_rtsp"
 
   def project do
@@ -113,7 +113,8 @@ defmodule Membrane.RTSP.MixProject do
   defp deps do
     [
       {:bunch, "~> 1.6"},
-      {:ex_sdp, "~> 0.17.0 or ~> 1.0"},
+      # TEMPORARY: replace with {:ex_sdp, "~> 1.4"} once ex_sdp 1.4.0 is released
+      {:ex_sdp, github: "membraneframework/ex_sdp", branch: "lenient-rtsp-ingest"},
       {:nimble_parsec, "~> 1.4.0", runtime: false},
       {:dialyxir, ">= 0.0.0", only: [:dev], runtime: false},
       {:mockery, "~> 2.3", runtime: false},
